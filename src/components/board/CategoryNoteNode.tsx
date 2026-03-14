@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import type { CategoryNote } from '../../types';
-import { SHOT_CATEGORIES, SHOT_PROMPT_TOOLTIPS } from '../../types';
+import { SHOT_CATEGORIES, SHOT_DIRECTOR_GUIDES } from '../../types';
+import { DirectorGuidePanel } from './DirectorGuidePanel';
 import { useBoardStore } from '../../stores/useBoardStore';
 import { useImageStore } from '../../stores/useImageStore';
 import { useMention } from '../../hooks/useMention';
@@ -19,43 +19,6 @@ interface Props {
 const DRAG_THRESHOLD = 4;
 const IS_TOUCH = typeof window !== 'undefined' && navigator.maxTouchPoints > 0;
 
-// Portal-based tooltip — escapes overflow:hidden containers
-function PromptTooltip({ text, x, y }: { text: string; x: number; y: number }) {
-    return createPortal(
-        <div style={{
-            position: 'fixed',
-            left: x,
-            top: y,
-            transform: 'translateY(-50%)',
-            background: 'rgba(10,11,20,0.97)',
-            backdropFilter: 'blur(20px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            borderRadius: 10,
-            padding: '8px 12px',
-            fontSize: 10,
-            fontFamily: "'Inter', system-ui, sans-serif",
-            color: 'rgba(255,255,255,0.72)',
-            lineHeight: 1.6,
-            letterSpacing: '0.01em',
-            whiteSpace: 'pre-wrap',
-            maxWidth: 260,
-            zIndex: 99999,
-            pointerEvents: 'none',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04)',
-            animation: 'tooltipFadeIn 0.15s cubic-bezier(0.22, 1, 0.36, 1) forwards',
-        }}>
-            <style>{`
-                @keyframes tooltipFadeIn {
-                    from { opacity: 0; transform: translateY(-50%) scale(0.95); }
-                    to { opacity: 1; transform: translateY(-50%) scale(1); }
-                }
-            `}</style>
-            {text.replace(/·/g, '\n·').replace(/^·/, '')}
-        </div>,
-        document.body
-    );
-}
 
 export function CategoryNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
     const updateCategoryNote = useBoardStore((s) => s.updateCategoryNote);
@@ -79,7 +42,7 @@ export function CategoryNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
     const [isMinimized, setIsMinimized] = useState(note.isMinimized ?? false);
     const [animatingMinimize, setAnimatingMinimize] = useState(false);
     const [localText, setLocalText] = useState(note.text);
-    const [tooltipInfo, setTooltipInfo] = useState<{ prompt: string; x: number; y: number } | null>(null);
+    const [activeGuide, setActiveGuide] = useState<{ prompt: string; x: number; y: number } | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     useEffect(() => {
@@ -146,6 +109,13 @@ export function CategoryNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
         window.addEventListener('pointermove', handlePointerMove);
         window.addEventListener('pointerup', handlePointerUp);
     }, [note.id, note.x, note.y, zoomScale, updateCategoryNote]);
+
+    const handleGuideInsert = useCallback((text: string) => {
+        const current = localText.trim();
+        const newText = current ? `${current}, ${text}` : text;
+        setLocalText(newText);
+        updateCategoryNote(note.id, { text: newText });
+    }, [localText, note.id, updateCategoryNote]);
 
     const togglePrompt = useCallback((prompt: string) => {
         const checked = note.checkedPrompts.includes(prompt)
@@ -513,8 +483,7 @@ export function CategoryNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
                             <div style={{ padding: '9px 11px 5px', display: 'flex', flexDirection: 'column', gap: IS_TOUCH ? 6 : 4 }}>
                                 {category.prompts.map(prompt => {
                                     const checked = note.checkedPrompts.includes(prompt);
-                                    const tooltipText = SHOT_PROMPT_TOOLTIPS[prompt];
-                                    const showTooltip = tooltipInfo?.prompt === prompt && !!tooltipText;
+                                    const guide = SHOT_DIRECTOR_GUIDES[prompt];
                                     return (
                                         <div
                                             key={prompt}
@@ -572,50 +541,54 @@ export function CategoryNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
                                                 }}>
                                                 {prompt}
                                             </span>
-                                            {/* Tooltip ⓘ icon */}
-                                            {tooltipText && (
+                                            {/* Director's Guide ⓘ button */}
+                                            {guide && (
                                                 <div style={{ position: 'relative', flexShrink: 0 }}>
                                                     <button
-                                                        onMouseEnter={(e) => {
-                                                            const r = e.currentTarget.getBoundingClientRect();
-                                                            setTooltipInfo({ prompt, x: r.right + 8, y: r.top + r.height / 2 });
-                                                        }}
-                                                        onMouseLeave={() => setTooltipInfo(null)}
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            if (IS_TOUCH) {
-                                                                if (tooltipInfo?.prompt === prompt) {
-                                                                    setTooltipInfo(null);
-                                                                } else {
-                                                                    const r = e.currentTarget.getBoundingClientRect();
-                                                                    setTooltipInfo({ prompt, x: r.right + 8, y: r.top + r.height / 2 });
-                                                                }
+                                                            if (activeGuide?.prompt === prompt) {
+                                                                setActiveGuide(null);
+                                                            } else {
+                                                                const r = e.currentTarget.getBoundingClientRect();
+                                                                setActiveGuide({ prompt, x: r.right, y: r.top + r.height / 2 });
                                                             }
                                                         }}
-                                                        onPointerDown={e => e.stopPropagation()}
+                                                        onPointerDown={(e) => e.stopPropagation()}
                                                         style={{
                                                             width: 14, height: 14,
                                                             borderRadius: '50%',
-                                                            background: tooltipInfo?.prompt === prompt
+                                                            background: activeGuide?.prompt === prompt
                                                                 ? `${category.color}25`
                                                                 : 'rgba(255,255,255,0.06)',
-                                                            border: `1px solid ${tooltipInfo?.prompt === prompt ? `${category.color}40` : 'rgba(255,255,255,0.10)'}`,
-                                                            color: tooltipInfo?.prompt === prompt ? category.color : 'rgba(255,255,255,0.3)',
+                                                            border: `1px solid ${activeGuide?.prompt === prompt ? `${category.color}50` : 'rgba(255,255,255,0.10)'}`,
+                                                            color: activeGuide?.prompt === prompt ? category.color : 'rgba(255,255,255,0.3)',
                                                             fontSize: 8,
                                                             fontFamily: "'Inter', system-ui, sans-serif",
                                                             fontWeight: 700,
-                                                            cursor: 'default',
+                                                            cursor: 'pointer',
                                                             display: 'flex',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
                                                             transition: 'all 0.15s ease',
                                                             lineHeight: 1,
                                                             padding: 0,
+                                                            boxShadow: activeGuide?.prompt === prompt ? `0 0 8px ${category.color}40` : 'none',
                                                         }}
                                                     >
                                                         i
                                                     </button>
-                                                    {showTooltip && <PromptTooltip text={tooltipText} x={tooltipInfo!.x} y={tooltipInfo!.y} />}
+                                                    {activeGuide?.prompt === prompt && (
+                                                        <DirectorGuidePanel
+                                                            guide={guide}
+                                                            categoryColor={category.color}
+                                                            promptLabel={prompt}
+                                                            onInsert={handleGuideInsert}
+                                                            onClose={() => setActiveGuide(null)}
+                                                            anchorX={activeGuide.x}
+                                                            anchorY={activeGuide.y}
+                                                        />
+                                                    )}
                                                 </div>
                                             )}
                                         </div>

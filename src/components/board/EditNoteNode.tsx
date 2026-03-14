@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import type { EditNote } from '../../types';
-import { EDIT_CATEGORIES } from '../../types';
+import { EDIT_CATEGORIES, EDIT_DIRECTOR_GUIDES } from '../../types';
+import { DirectorGuidePanel } from './DirectorGuidePanel';
 import { useBoardStore } from '../../stores/useBoardStore';
 import { useImageStore } from '../../stores/useImageStore';
 import { useMention } from '../../hooks/useMention';
@@ -38,6 +39,7 @@ export function EditNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
     const [isMinimized, setIsMinimized] = useState(note.isMinimized ?? false);
     const [animatingMinimize, setAnimatingMinimize] = useState(false);
     const [localText, setLocalText] = useState(note.text);
+    const [activeGuide, setActiveGuide] = useState<{ prompt: string; x: number; y: number } | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     useEffect(() => {
@@ -104,6 +106,13 @@ export function EditNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
         window.addEventListener('pointermove', handlePointerMove);
         window.addEventListener('pointerup', handlePointerUp);
     }, [note.id, note.x, note.y, zoomScale, updateEditNote]);
+
+    const handleGuideInsert = useCallback((text: string) => {
+        const current = localText.trim();
+        const newText = current ? `${current}, ${text}` : text;
+        setLocalText(newText);
+        updateEditNote(note.id, { text: newText });
+    }, [localText, note.id, updateEditNote]);
 
     const togglePrompt = useCallback((prompt: string) => {
         const checked = note.checkedPrompts.includes(prompt)
@@ -296,8 +305,9 @@ export function EditNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
                     <div style={{ padding: '9px 11px 5px', display: 'flex', flexDirection: 'column', gap: 4 }}>
                         {category.prompts.map(prompt => {
                             const checked = note.checkedPrompts.includes(prompt);
+                            const guide = EDIT_DIRECTOR_GUIDES[prompt];
                             return (
-                                <label
+                                <div
                                     key={prompt}
                                     style={{
                                         display: 'flex',
@@ -339,17 +349,69 @@ export function EditNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
                                             </svg>
                                         )}
                                     </div>
-                                    <span style={{
-                                        fontSize: IS_TOUCH ? 11 : 10,
-                                        fontFamily: "'Inter', system-ui, sans-serif",
-                                        color: checked ? category.color : 'rgba(255,255,255,0.38)',
-                                        transition: 'color 0.15s ease',
-                                        userSelect: 'none',
-                                        letterSpacing: '0.01em',
-                                    }}>
+                                    <span
+                                        onClick={(e) => { e.stopPropagation(); togglePrompt(prompt); }}
+                                        style={{
+                                            flex: 1,
+                                            fontSize: IS_TOUCH ? 11 : 10,
+                                            fontFamily: "'Inter', system-ui, sans-serif",
+                                            color: checked ? category.color : 'rgba(255,255,255,0.38)',
+                                            transition: 'color 0.15s ease',
+                                            userSelect: 'none',
+                                            letterSpacing: '0.01em',
+                                            cursor: 'pointer',
+                                        }}>
                                         {prompt}
                                     </span>
-                                </label>
+                                    {/* Director's Guide ⓘ button */}
+                                    {guide && (
+                                        <div style={{ position: 'relative', flexShrink: 0 }}>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (activeGuide?.prompt === prompt) {
+                                                        setActiveGuide(null);
+                                                    } else {
+                                                        const r = e.currentTarget.getBoundingClientRect();
+                                                        setActiveGuide({ prompt, x: r.right, y: r.top + r.height / 2 });
+                                                    }
+                                                }}
+                                                onPointerDown={(e) => e.stopPropagation()}
+                                                style={{
+                                                    width: 14, height: 14,
+                                                    borderRadius: '50%',
+                                                    background: activeGuide?.prompt === prompt ? `${category.color}25` : 'rgba(255,255,255,0.06)',
+                                                    border: `1px solid ${activeGuide?.prompt === prompt ? `${category.color}50` : 'rgba(255,255,255,0.10)'}`,
+                                                    color: activeGuide?.prompt === prompt ? category.color : 'rgba(255,255,255,0.3)',
+                                                    fontSize: 8,
+                                                    fontFamily: "'Inter', system-ui, sans-serif",
+                                                    fontWeight: 700,
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    transition: 'all 0.15s ease',
+                                                    lineHeight: 1,
+                                                    padding: 0,
+                                                    boxShadow: activeGuide?.prompt === prompt ? `0 0 8px ${category.color}40` : 'none',
+                                                }}
+                                            >
+                                                i
+                                            </button>
+                                            {activeGuide?.prompt === prompt && (
+                                                <DirectorGuidePanel
+                                                    guide={guide}
+                                                    categoryColor={category.color}
+                                                    promptLabel={prompt}
+                                                    onInsert={handleGuideInsert}
+                                                    onClose={() => setActiveGuide(null)}
+                                                    anchorX={activeGuide.x}
+                                                    anchorY={activeGuide.y}
+                                                />
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             );
                         })}
                     </div>
