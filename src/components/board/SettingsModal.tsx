@@ -5,13 +5,16 @@ import { getLogs } from '../../utils/logger';
 
 export function SettingsModal() {
     const {
-        apiKey, model, customModels, showSettings,
-        setApiKey, setModel, addCustomModel, removeCustomModel, closeSettings,
+        apiKey, openAiApiKey, model, customModels, showSettings,
+        setApiKey, setOpenAiApiKey, setModel, addCustomModel, removeCustomModel, closeSettings,
     } = useSettingsStore();
 
     const [localKey, setLocalKey] = useState(apiKey);
+    const [localOpenAiKey, setLocalOpenAiKey] = useState(openAiApiKey);
     const [showKey, setShowKey] = useState(false);
+    const [showOpenAiKey, setShowOpenAiKey] = useState(false);
     const [saved, setSaved] = useState(false);
+    const [savedOpenAi, setSavedOpenAi] = useState(false);
     const [customInput, setCustomInput] = useState('');
     const [justAdded, setJustAdded] = useState<string | null>(null);
     const [logLines, setLogLines] = useState(100);
@@ -22,6 +25,12 @@ export function SettingsModal() {
         setApiKey(localKey.trim());
         setSaved(true);
         setTimeout(() => setSaved(false), 1500);
+    };
+
+    const handleSaveOpenAi = () => {
+        setOpenAiApiKey(localOpenAiKey.trim());
+        setSavedOpenAi(true);
+        setTimeout(() => setSavedOpenAi(false), 1500);
     };
 
     const handleAddCustom = () => {
@@ -177,6 +186,74 @@ export function SettingsModal() {
                             Get your key at{' '}
                             <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer"
                                 style={{ color: '#f97316', textDecoration: 'none' }}>openrouter.ai/keys</a>
+                        </div>
+                    </div>
+
+                    {/* ── OpenAI API Key ── */}
+                    <div>
+                        <label style={{
+                            display: 'block', fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
+                            color: '#888', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase',
+                        }}>
+                            OpenAI API Key (for Voice)
+                        </label>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                            <div style={{ flex: 1, position: 'relative' }}>
+                                <input
+                                    type={showOpenAiKey ? 'text' : 'password'}
+                                    value={localOpenAiKey}
+                                    onChange={e => setLocalOpenAiKey(e.target.value)}
+                                    placeholder="sk-..."
+                                    style={{
+                                        width: '100%', background: '#0a0a0a', border: '1px solid #2a2a2a',
+                                        borderRadius: 8, color: '#e5e5e5', fontSize: 13,
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        padding: '9px 40px 9px 12px', outline: 'none',
+                                        transition: 'border-color 0.12s ease',
+                                    }}
+                                    onFocus={e => (e.target as HTMLElement).style.borderColor = '#f97316'}
+                                    onBlur={e => (e.target as HTMLElement).style.borderColor = '#2a2a2a'}
+                                />
+                                <button
+                                    onClick={() => setShowOpenAiKey(!showOpenAiKey)}
+                                    style={{
+                                        position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                                        background: 'none', border: 'none', color: '#555', cursor: 'pointer',
+                                        padding: 4, display: 'flex',
+                                    }}
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        {showOpenAiKey ? (
+                                            <>
+                                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                                                <line x1="1" y1="1" x2="23" y2="23" />
+                                            </>
+                                        ) : (
+                                            <>
+                                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                                <circle cx="12" cy="12" r="3" />
+                                            </>
+                                        )}
+                                    </svg>
+                                </button>
+                            </div>
+                            <button
+                                onClick={handleSaveOpenAi}
+                                style={{
+                                    background: savedOpenAi ? 'rgba(74,222,128,0.15)' : 'rgba(249,115,22,0.12)',
+                                    border: `1px solid ${savedOpenAi ? 'rgba(74,222,128,0.3)' : 'rgba(249,115,22,0.25)'}`,
+                                    color: savedOpenAi ? '#4ade80' : '#f97316', borderRadius: 8,
+                                    padding: '0 14px', fontSize: 12, fontFamily: "'Inter', system-ui, sans-serif",
+                                    fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s ease', whiteSpace: 'nowrap',
+                                }}
+                            >
+                                {savedOpenAi ? '✓ Saved' : 'Save'}
+                            </button>
+                        </div>
+                        <div style={{ marginTop: 6, fontSize: 10, color: '#555', fontFamily: "'Inter', system-ui, sans-serif" }}>
+                            Used for Whisper (transcription) and TTS (voice). Get key at{' '}
+                            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer"
+                                style={{ color: '#f97316', textDecoration: 'none' }}>platform.openai.com</a>
                         </div>
                     </div>
 

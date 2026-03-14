@@ -12,6 +12,7 @@ import { CollabSessionModal } from '../collab/CollabSessionModal';
 import { CollabJoinOverlay } from '../collab/CollabJoinOverlay';
 import { ImageTransferToast } from '../collab/ImageTransferToast';
 import { useCollabStore } from '../../stores/useCollabStore';
+import { VoiceQuizModal } from './VoiceQuizModal';
 
 export function BoardPage() {
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
@@ -56,6 +57,7 @@ export function BoardPage() {
       <CollabSessionModal />
       <CollabJoinOverlay />
       <ImageTransferToast />
+      <VoiceQuizModal />
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { SHOT_CATEGORIES, EDIT_CATEGORIES } from '../types';
 import type { ShotCategoryId, EditCategoryId, GodModeNode } from '../types';
 import { getBlob } from './db-operations';
 
-async function imageToBase64(blobId: string): Promise<{ base64: string; mimeType: string } | null> {
+export async function imageToBase64(blobId: string): Promise<{ base64: string; mimeType: string } | null> {
   try {
     const blob = await getBlob(blobId);
     if (!blob) return null;

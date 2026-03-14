@@ -9,11 +9,13 @@ export interface ModelEntry {
 
 interface SettingsStore {
     apiKey: string;
+    openAiApiKey: string;
     model: string;
     customModels: ModelEntry[];
     showSettings: boolean;
 
     setApiKey: (key: string) => void;
+    setOpenAiApiKey: (key: string) => void;
     setModel: (model: string) => void;
     addCustomModel: (id: string) => void;
     removeCustomModel: (id: string) => void;
@@ -23,7 +25,7 @@ interface SettingsStore {
 
 const STORAGE_KEY = 'moodboard-settings';
 
-function loadFromStorage(): { apiKey?: string; model?: string; customModels?: ModelEntry[] } {
+function loadFromStorage(): { apiKey?: string; openAiApiKey?: string; model?: string; customModels?: ModelEntry[] } {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) return JSON.parse(raw);
@@ -31,7 +33,7 @@ function loadFromStorage(): { apiKey?: string; model?: string; customModels?: Mo
     return {};
 }
 
-function saveToStorage(data: { apiKey: string; model: string; customModels: ModelEntry[] }) {
+function saveToStorage(data: { apiKey: string; openAiApiKey: string; model: string; customModels: ModelEntry[] }) {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch { /* ignore */ }
@@ -76,18 +78,24 @@ const stored = loadFromStorage();
 
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
     apiKey: stored.apiKey || '',
+    openAiApiKey: stored.openAiApiKey || '',
     model: stored.model || 'google/gemini-2.0-flash-001',
     customModels: stored.customModels || [],
     showSettings: false,
 
     setApiKey: (apiKey) => {
         set({ apiKey });
-        saveToStorage({ apiKey, model: get().model, customModels: get().customModels });
+        saveToStorage({ apiKey, openAiApiKey: get().openAiApiKey, model: get().model, customModels: get().customModels });
+    },
+
+    setOpenAiApiKey: (openAiApiKey) => {
+        set({ openAiApiKey });
+        saveToStorage({ apiKey: get().apiKey, openAiApiKey, model: get().model, customModels: get().customModels });
     },
 
     setModel: (model) => {
         set({ model });
-        saveToStorage({ apiKey: get().apiKey, model, customModels: get().customModels });
+        saveToStorage({ apiKey: get().apiKey, openAiApiKey: get().openAiApiKey, model, customModels: get().customModels });
     },
 
     addCustomModel: (id) => {
@@ -102,14 +110,14 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         const newModel: ModelEntry = { id: trimmed, label, provider, isCustom: true };
         const customModels = [...get().customModels, newModel];
         set({ customModels, model: trimmed });
-        saveToStorage({ apiKey: get().apiKey, model: trimmed, customModels });
+        saveToStorage({ apiKey: get().apiKey, openAiApiKey: get().openAiApiKey, model: trimmed, customModels });
     },
 
     removeCustomModel: (id) => {
         const customModels = get().customModels.filter(m => m.id !== id);
         const newModel = get().model === id ? DEFAULT_MODELS[0].id : get().model;
         set({ customModels, model: newModel });
-        saveToStorage({ apiKey: get().apiKey, model: newModel, customModels });
+        saveToStorage({ apiKey: get().apiKey, openAiApiKey: get().openAiApiKey, model: newModel, customModels });
     },
 
     toggleSettings: () => set(s => ({ showSettings: !s.showSettings })),
