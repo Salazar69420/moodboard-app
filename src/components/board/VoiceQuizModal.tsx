@@ -314,30 +314,48 @@ function VoiceQuizOverlay({ quiz }: { quiz: ReturnType<typeof useVoiceQuiz> }) {
               </div>
             )}
 
-            <button
-              onClick={() => quiz.confirmFields(quiz.filledFields)}
-              disabled={quiz.filledFields.filter(f => !f.wasRejected).length === 0}
-              style={{
-                marginTop: 8,
-                background: quiz.filledFields.filter(f => !f.wasRejected).length > 0
-                  ? 'rgba(74,222,128,0.12)' : '#111',
-                border: `1px solid ${quiz.filledFields.filter(f => !f.wasRejected).length > 0
-                  ? 'rgba(74,222,128,0.3)' : '#222'}`,
-                color: quiz.filledFields.filter(f => !f.wasRejected).length > 0
-                  ? '#4ade80' : '#444',
-                borderRadius: 10,
-                padding: '12px 20px',
-                fontSize: 13,
-                fontFamily: "'Inter', system-ui, sans-serif",
-                fontWeight: 600,
-                cursor: quiz.filledFields.filter(f => !f.wasRejected).length > 0
-                  ? 'pointer' : 'not-allowed',
-                transition: 'all 0.15s ease',
-                flexShrink: 0,
-              }}
-            >
-              Write to node
-            </button>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8, flexShrink: 0 }}>
+              <button
+                onClick={quiz.closeQuiz}
+                style={{
+                  background: 'rgba(239,68,68,0.08)',
+                  border: '1px solid rgba(239,68,68,0.2)',
+                  color: '#ef4444',
+                  borderRadius: 10,
+                  padding: '12px 16px',
+                  fontSize: 12,
+                  fontFamily: "'Inter', system-ui, sans-serif",
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                Discard
+              </button>
+              <button
+                onClick={() => quiz.confirmFields(quiz.filledFields)}
+                disabled={quiz.filledFields.filter(f => !f.wasRejected).length === 0}
+                style={{
+                  flex: 1,
+                  background: quiz.filledFields.filter(f => !f.wasRejected).length > 0
+                    ? 'rgba(74,222,128,0.12)' : '#111',
+                  border: `1px solid ${quiz.filledFields.filter(f => !f.wasRejected).length > 0
+                    ? 'rgba(74,222,128,0.3)' : '#222'}`,
+                  color: quiz.filledFields.filter(f => !f.wasRejected).length > 0
+                    ? '#4ade80' : '#444',
+                  borderRadius: 10,
+                  padding: '12px 20px',
+                  fontSize: 13,
+                  fontFamily: "'Inter', system-ui, sans-serif",
+                  fontWeight: 600,
+                  cursor: quiz.filledFields.filter(f => !f.wasRejected).length > 0
+                    ? 'pointer' : 'not-allowed',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                Write to node
+              </button>
+            </div>
           </div>
         )}
 
@@ -481,58 +499,100 @@ function VoiceQuizOverlay({ quiz }: { quiz: ReturnType<typeof useVoiceQuiz> }) {
           </div>
         )}
 
-        {/* Bottom controls */}
-        {quiz.status === 'listening' && (
+        {/* Bottom controls — always visible during active session */}
+        {quiz.status !== 'error' && quiz.status !== 'confirming' && (
           <div style={{
-            padding: '12px 18px',
+            padding: '10px 14px',
             borderTop: '1px solid #1a1a2a',
             display: 'flex',
-            justifyContent: 'center',
+            alignItems: 'center',
+            justifyContent: 'space-between',
             flexShrink: 0,
+            gap: 8,
           }}>
+            {/* Left: context-sensitive action */}
+            <div style={{ flex: 1 }}>
+              {quiz.status === 'listening' && (
+                <button
+                  onClick={quiz.manualStopListening}
+                  style={{
+                    background: 'rgba(245,158,11,0.12)',
+                    border: '1px solid rgba(245,158,11,0.3)',
+                    color: '#f59e0b',
+                    borderRadius: 8,
+                    padding: '8px 16px',
+                    fontSize: 12,
+                    fontFamily: "'Inter', system-ui, sans-serif",
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="4" y="4" width="16" height="16" rx="2" />
+                  </svg>
+                  Done Speaking
+                </button>
+              )}
+              {quiz.status === 'speaking' && (
+                <span style={{
+                  fontSize: 11, color: '#60a5fa',
+                  fontFamily: "'Inter', system-ui, sans-serif",
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  </svg>
+                  AI speaking...
+                </span>
+              )}
+              {(quiz.status === 'thinking' || quiz.status === 'processing' || quiz.status === 'analyzing') && (
+                <span style={{
+                  fontSize: 11, color: '#555',
+                  fontFamily: "'Inter', system-ui, sans-serif",
+                }}>
+                  {quiz.messages.length > 0 ? `${quiz.messages.length} exchanges` : 'Starting up...'}
+                </span>
+              )}
+            </div>
+
+            {/* Right: always-visible End Session button */}
             <button
-              onClick={quiz.manualStopListening}
+              onClick={quiz.closeQuiz}
               style={{
-                background: 'rgba(245,158,11,0.12)',
-                border: '1px solid rgba(245,158,11,0.3)',
-                color: '#f59e0b',
-                borderRadius: 10,
-                padding: '10px 24px',
+                background: 'rgba(239,68,68,0.08)',
+                border: '1px solid rgba(239,68,68,0.2)',
+                color: '#ef4444',
+                borderRadius: 8,
+                padding: '8px 14px',
                 fontSize: 12,
                 fontFamily: "'Inter', system-ui, sans-serif",
                 fontWeight: 600,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
+                gap: 6,
+                transition: 'all 0.15s ease',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.16)';
+                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(239,68,68,0.4)';
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.08)';
+                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(239,68,68,0.2)';
               }}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <rect x="4" y="4" width="16" height="16" rx="2" />
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
               </svg>
-              Done Speaking
+              End Session
             </button>
-          </div>
-        )}
-
-        {quiz.status === 'speaking' && (
-          <div style={{
-            padding: '12px 18px',
-            borderTop: '1px solid #1a1a2a',
-            display: 'flex',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}>
-            <span style={{
-              fontSize: 11, color: '#60a5fa', fontFamily: "'Inter', system-ui, sans-serif",
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-              </svg>
-              AI is speaking...
-            </span>
           </div>
         )}
 
