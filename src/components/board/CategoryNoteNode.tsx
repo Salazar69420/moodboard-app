@@ -157,7 +157,7 @@ export function CategoryNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
             }}
             onPointerDown={handlePointerDown}
             onPointerEnter={() => setIsHovered(true)}
-            onPointerLeave={() => { setIsHovered(false); setTooltipInfo(null); }}
+            onPointerLeave={() => { setIsHovered(false); setActiveGuide(null); }}
             onWheel={(e) => e.stopPropagation()}
             onContextMenu={(e) => {
                 e.preventDefault();
