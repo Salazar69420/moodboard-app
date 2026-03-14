@@ -8,6 +8,7 @@ import { SHOT_CATEGORIES, EDIT_CATEGORIES } from '../../types';
 import type { ShotCategoryId, EditCategoryId } from '../../types';
 import { reverseEngineerI2V, reverseEngineerEdit } from '../../utils/reverse-engineer';
 import { generateImageName } from '../../utils/ai-features';
+import { downloadMedia } from '../../utils/download';
 
 interface RadialMenuItem {
   label: string;
@@ -196,6 +197,18 @@ export function RadialContextMenu() {
       action: () => {
         useUIStore.getState().setCroppingImage(image.id);
         hideContextMenu();
+      },
+    });
+
+    // Download
+    items.push({
+      label: 'Download',
+      icon: '⬇',
+      color: '#4ade80',
+      action: async () => {
+        hideContextMenu();
+        await downloadMedia(image.blobId, image.filename);
+        showToast('Download started');
       },
     });
 
