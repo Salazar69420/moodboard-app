@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(npm create vite@latest . -- --template react-ts)",
+      "Read(//c/Users/salaz/OneDrive/Desktop/**)",
+      "Bash(npm create vite@latest moodboard-temp -- --template react-ts)",
+      "Bash(cp -r \"/c/Users/salaz/OneDrive/Desktop/moodboard-temp/\"* \"/c/Users/salaz/OneDrive/Desktop/moodboard app/\")",
+      "Bash(cp \"/c/Users/salaz/OneDrive/Desktop/moodboard-temp/\".* \"/c/Users/salaz/OneDrive/Desktop/moodboard app/\")",
+      "Bash(rm -rf \"/c/Users/salaz/OneDrive/Desktop/moodboard-temp\")",
+      "Bash(npm install)",
+      "Bash(npm install tailwindcss @tailwindcss/vite zustand idb nanoid react-zoom-pan-pinch)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(where node)",
+      "Bash(where npx)",
+      "Bash(where npm)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(npx vite build)",
+      "Bash(npm run build)",
+      "Bash(npx vercel --prod)",
+      "Read(//mnt/c/Users/salaz/Downloads/**)",
+      "Read(//c/Users/salaz/Downloads/Browser Downloads/**)",
+      "Read(//mnt/c/Users/salaz/**)",
+      "Bash(DOCX_PATH=\"/mnt/c/Users/salaz/Downloads/Browser Downloads/Dan Kieft''s How to use Nano banana 2.docx\")",
+      "Bash(SKILL_DIR=\"C:\\\\Users\\\\salaz\\\\AppData\\\\Roaming\\\\Claude\\\\local-agent-mode-sessions\\\\skills-plugin\\\\5119b809-4ecc-4132-9bc7-9c9a91859e07\\\\30c6b4aa-677d-4429-9bf5-79fbe03e4bb9\\\\skills\\\\docx\")",
+      "Bash(python \"$SKILL_DIR/scripts/office/unpack.py\" \"$DOCX_PATH\" \"/tmp/nano_unpacked/\")",
+      "Bash(python -c \":*)",
+      "Bash(vercel --prod)"
+    ]
+  }
+}

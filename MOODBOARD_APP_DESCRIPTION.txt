@@ -1,0 +1,671 @@
+================================================================================
+MOODBOARD APP — COMPLETE FEATURE DESCRIPTION
+================================================================================
+Generated: 2026-03-13
+Tech Stack: React 19 + TypeScript + Zustand + Tailwind CSS + IndexedDB + Yjs
+================================================================================
+
+
+--------------------------------------------------------------------------------
+OVERVIEW
+--------------------------------------------------------------------------------
+
+The Moodboard App is an AI-powered, browser-based creative workspace designed
+for filmmakers, photographers, and visual artists. It allows users to organise
+images and videos on an infinite canvas and attach structured notes that feed
+into AI-powered prompt generation pipelines. The app supports two distinct
+creative workflows: Image-to-Video (I2V) shot planning and Image Editing prompt
+building. Everything runs locally in the browser with no backend — images are
+stored in IndexedDB, settings in localStorage, and real-time collaboration is
+handled peer-to-peer via WebRTC.
+
+
+================================================================================
+SECTION 1 — PROJECTS
+================================================================================
+
+The app opens to a Project List page showing all saved projects as cards in a
+grid layout. Each card displays the project's name, its type, how many images it
+contains, and a thumbnail automatically extracted from the first image added.
+
+PROJECT TYPES:
+  • mood-board  — General purpose visual reference board
+  • storyboard  — Sequential shot planning
+  • first-frames — Reference frames for first shots or key moments
+
+CREATING A PROJECT:
+  A "New Project" button opens a dialog where the user types a name and selects
+  a project type. Pressing confirm creates the project and navigates into its
+  board canvas.
+
+DELETING / RENAMING A PROJECT:
+  Right-clicking (or a context menu button) on a project card exposes rename and
+  delete options. Deletion removes the project along with every associated image,
+  blob, note, connection, and node stored in IndexedDB.
+
+IMPORT / EXPORT:
+  Projects can be exported to a .json file that contains the full project
+  structure including all images encoded as base64 blobs, all notes, connections,
+  and nodes. The .json can later be imported on any device/browser to fully
+  restore the project. This acts as a portable backup format.
+
+
+================================================================================
+SECTION 2 — THE CANVAS
+================================================================================
+
+The canvas is an infinite, pannable, zoomable workspace where all visual and
+textual content lives.
+
+ZOOM:
+  • Mouse wheel scrolls zoom the canvas between 10% and 300%.
+  • On touch devices, pinch-to-zoom is supported.
+  • The zoom level is shown in the header.
+
+PAN:
+  • Hold Space and drag to pan the canvas on desktop.
+  • Touch devices use a two-finger drag to pan.
+
+COORDINATE SYSTEM:
+  Every object on the canvas has an absolute x/y position stored in the
+  database. Zoom and pan are applied via CSS transform on a single container
+  div, so all positions remain consistent regardless of the current viewport
+  state.
+
+MINIMAP:
+  A minimap in the corner shows a scaled-down overview of all canvas content.
+  A rectangle represents the current viewport. Clicking anywhere on the minimap
+  jumps the viewport to that area. The minimap updates in real time as objects
+  are added or moved.
+
+SELECTION:
+  • Click an image to select it (highlights with an orange border).
+  • Hold Ctrl/Cmd and click additional images to multi-select.
+  • Ctrl+A / Cmd+A selects all images on the canvas.
+  • Clicking blank canvas deselects everything.
+
+FOCUS MODE:
+  When a single image is focused (clicked into edit mode), all other canvas
+  content dims to 15% opacity with a blur effect, drawing attention to the
+  focused item.
+
+
+================================================================================
+SECTION 3 — IMAGES & VIDEOS
+================================================================================
+
+IMPORTING MEDIA:
+  Images and videos can be added to the canvas in three ways:
+    1. Drag and drop files from the file system onto the canvas.
+    2. Paste an image from the clipboard (Ctrl/Cmd+V).
+    3. Click a file picker button in the toolbar (supports multi-select).
+
+  Supported types: image/* and video/* MIME types.
+
+  On import, the app:
+    • Stores the raw Blob in IndexedDB under a generated blob ID.
+    • Reads the image/video dimensions (via HTMLImageElement or HTMLVideoElement
+      onload).
+    • Creates a BoardImage record with position, dimensions, and metadata.
+    • Places the image at the mouse position or a default offset.
+    • Generates and caches a blob URL (createObjectURL) for immediate display.
+
+DISPLAY:
+  Images render at a max default width of 350px while preserving aspect ratio.
+  Users can resize images by dragging corner/edge handles. The display width and
+  height are stored separately from the original dimensions so cropping does not
+  permanently destroy data.
+
+LABELS:
+  Each image can have a text label displayed below it. Labels are editable by
+  clicking on them. Labels are also used in the full-text search feature.
+
+ACCENT COLOR:
+  Each image has an accent color (a hex value). Clicking a color picker icon on
+  the image opens a color swatch. The chosen color is used as a visual highlight
+  color for that image's UI elements (borders, badges, etc.).
+
+DUPLICATION:
+  Pressing Cmd/Ctrl+D while an image is selected duplicates it along with all
+  its attached category notes, edit notes, prompt nodes, and connections. The
+  duplicate is placed at a slight offset from the original.
+
+DELETION:
+  Pressing Delete or Backspace removes the selected image(s) and all their
+  associated notes, prompts, and connections from the canvas and IndexedDB.
+
+CROPPING:
+  Right-clicking an image or using the floating toolbar opens a crop overlay.
+  The user drags handles to define a crop rectangle. On confirm, the app:
+    • Records the crop bounds (cropX, cropY, cropW, cropH) in the database.
+    • Writes a new cropped Blob back to IndexedDB under the same blob ID.
+    • Clears any overridden display dimensions so the cropped size becomes
+      the natural display size.
+  The crop UI shows the overlay directly on the canvas rather than in a modal.
+
+VIDEOS:
+  Video files are handled identically to images in terms of storage and
+  positioning. A play button overlay appears on video thumbnails. The video
+  duration is extracted and stored. Videos can be assigned shot notes and
+  have prompts generated from their first frame.
+
+SHOT ORDER:
+  Each image has a shotOrder numeric field used to define the sequence in the
+  Shot Panel. Shot order can be edited directly in the Shot Panel via drag-and-
+  drop reordering.
+
+
+================================================================================
+SECTION 4 — BOARD MODES
+================================================================================
+
+The board operates in one of two modes that determine the type of notes attached
+to images and the AI prompt style used.
+
+I2V MODE (Image-to-Video):
+  Keyboard shortcut: Cmd/Ctrl+1
+  Designed for planning video shots. Each image can have up to 11 category
+  notes covering every dimension of a video shot.
+
+  The 11 categories are:
+    1. Camera       — Camera movement (pan, tilt, dolly, static, etc.)
+    2. Subject      — Who/what is in the shot
+    3. Action       — What is happening
+    4. Environment  — Location and setting
+    5. Lighting     — Light sources, quality, direction, time of day
+    6. Texture      — Surface detail and tactile feel
+    7. Audio        — Sound design and ambient audio
+    8. Mood         — Emotional tone and atmosphere
+    9. Color        — Color palette and grading
+    10. Lens        — Focal length, depth of field, lens type
+    11. Time        — Time of day or special time presets (golden hour, magic
+                      hour, blue hour, midday, midnight, overcast)
+
+EDIT MODE (Image-to-Image Editing):
+  Keyboard shortcut: Cmd/Ctrl+2
+  Designed for building image generation/editing prompts using the Nano Banana 2
+  six-part formula. Each image can have up to 6 category notes:
+
+    1. Subject      — Primary subject description
+    2. Action       — What the subject is doing
+    3. Environment  — Where the scene takes place
+    4. Art Style    — Visual/artistic style reference
+    5. Lighting     — Lighting conditions
+    6. Camera       — Camera angle, lens, framing
+
+Switching modes changes the visible note types on the canvas. Notes from the
+other mode are preserved in the database and restored when switching back.
+
+
+================================================================================
+SECTION 5 — CATEGORY NOTES
+================================================================================
+
+Category notes are the core annotation layer of the app. Each note is a
+draggable, resizable panel pinned to an image on the canvas.
+
+APPEARANCE:
+  Each note shows the category name, an emoji icon, and a colored header bar
+  (each category has its own color). The note body contains a textarea for
+  free-form text and a checklist of predefined prompt hints.
+
+CREATION:
+  Notes are created from the floating toolbar that appears when hovering over
+  an image. One button per missing category is shown. Clicking a button spawns
+  the note at the right side of the image, stacking below any existing notes.
+
+TEXTAREA:
+  The main text field is a free-form input where the user writes their note for
+  that category. The text is sent to the AI as part of the prompt.
+
+PROMPT HINT CHECKLIST:
+  Below the textarea is a checklist of common prompt phrases for that category
+  (e.g., for Camera: "slow zoom in", "handheld shake", "drone pull-back"). Each
+  item has a checkbox. Checking an item appends that phrase to the prompt at
+  generation time. Hovering a hint shows a tooltip with a longer explanation.
+
+TIME PRESETS (Time category only):
+  The Time category note shows quick-select buttons for Golden Hour, Magic Hour,
+  Blue Hour, Midday, Midnight, and Overcast. Clicking one fills the textarea
+  with that preset value.
+
+MINIMISE:
+  Each note has a minimise toggle. When minimised, only the category header bar
+  is shown, collapsing the body. The minimised state persists in the database.
+
+DRAGGING:
+  Notes are dragged by their header. Position is stored in the database.
+
+RESIZING:
+  Notes can be resized by dragging their bottom-right corner. Width and height
+  are stored in the database.
+
+CONTEXT MENU:
+  Right-clicking a note opens a menu with options to:
+    • Duplicate the note to another image (with conflict detection — if the
+      target already has a note in that category, the user is asked to overwrite
+      or skip).
+    • Delete the note.
+
+AUTO-ARRANGE:
+  A toolbar button triggers auto-arrange, which stacks all notes for an image
+  in a tidy vertical column to the right of the image with consistent spacing.
+
+COMPLETION BADGE:
+  Each image shows a small badge with a count of how many of its expected
+  category notes have been filled in. This gives a quick visual indicator of
+  how complete the annotations are.
+
+
+================================================================================
+SECTION 6 — PROMPT GENERATION
+================================================================================
+
+The app generates natural-language prompts from category notes using an external
+AI API.
+
+API:
+  All requests go to OpenRouter.ai's chat completions endpoint, which routes to
+  whichever model the user has selected. The API key is stored in localStorage.
+
+MODEL SELECTION:
+  Default available models:
+    • Gemini 2.0 Flash (default)
+    • GPT-4o
+    • Claude (Anthropic)
+    • Llama
+    • Qwen
+  Users can also add custom model IDs in the settings.
+
+PROMPT STRUCTURE (I2V):
+  The system prompt instructs the AI to act as a cinematic prompt writer.
+  The user message is constructed from all filled-in category notes for the
+  image, plus the text from any checked hint items. The primary image is
+  base64-encoded and sent as a vision input so the AI can see the actual image.
+  Any "connected" images (see Connections section) are also sent as supplementary
+  vision inputs.
+
+PROMPT STRUCTURE (Edit):
+  Same flow but uses a different system prompt tuned for the Nano Banana 2
+  image editing formula. The six-part note values are structured and sent.
+
+GENERATION FLOW:
+  1. User clicks the "Generate Prompt" button on an image.
+  2. A confirmation popover appears.
+  3. On confirm, the app encodes the image to base64, builds the message, calls
+     the API, and streams/awaits the response.
+  4. The resulting prompt text is stored as a PromptNode in the database.
+  5. The PromptNode appears on the canvas as a draggable panel next to the image.
+
+PROMPT NODE:
+  • Displays the generated prompt text.
+  • Has a one-click copy button.
+  • Stores the last 3 versions in a history array (accessible via a dropdown).
+  • Can be regenerated (replaces the current version, moves old to history).
+  • Shows "Updated" tooltip when a note has changed since last generation.
+
+GOD MODE NODES:
+  God Mode nodes are global instruction panels that are always injected into
+  every prompt regardless of which image is being generated for. They act as
+  universal style rules or constraints (e.g., "Always write in present tense",
+  "Never mention brand names").
+
+  • Created from the toolbar.
+  • Have a title and a text body.
+  • Can be enabled or disabled with a toggle (disabled nodes are ignored).
+  • Can be connected to specific images (the connected images are listed via
+    @mention chips on the node).
+  • Draggable and resizable on the canvas.
+
+
+================================================================================
+SECTION 7 — REVERSE ENGINEERING
+================================================================================
+
+The "Reverse Engineer" feature runs in the opposite direction: instead of
+generating a prompt from notes, it analyses an existing image or video and
+auto-fills the category notes.
+
+HOW IT WORKS:
+  1. User clicks the Reverse Engineer button (wand icon) on an image.
+  2. The image is base64-encoded and sent to the AI with a system prompt
+     instructing it to return a JSON object with all category fields populated.
+  3. The AI response is parsed as JSON.
+  4. For each returned category, a new note is created (or an existing note is
+     updated) with the analysed value.
+
+I2V REVERSE ENGINEER:
+  Populates all 11 I2V categories from image/video analysis.
+
+EDIT REVERSE ENGINEER:
+  Populates all 6 edit categories from image analysis using the Nano Banana 2
+  formula.
+
+USE CASE:
+  Useful for referencing existing shots — drop in a reference frame, hit Reverse
+  Engineer, and get instant structured notes that describe what's already in the
+  image to use as a baseline.
+
+
+================================================================================
+SECTION 8 — CONNECTIONS
+================================================================================
+
+Connections are visual lines drawn between images and nodes on the canvas. They
+represent relationships (e.g., character sheet → hero shot, reference image →
+scene image).
+
+CREATING A CONNECTION:
+  • Select the Connection tool (keyboard shortcut C) or click the chain icon
+    on the floating toolbar.
+  • Click a source image/node, then click the destination.
+  • A line is drawn between the two items with an animated dashed stroke.
+
+CONNECTION LABELS:
+  Connections can have optional text labels placed at the midpoint of the line.
+
+VISUAL STYLE:
+  Connection lines animate with a flowing dash pattern. The line draws itself
+  in on creation with a stroke animation.
+
+EFFECT ON PROMPTS:
+  When generating a prompt for an image, any images connected to it are also
+  sent to the AI as supplementary reference images. This allows, for example,
+  a character sheet to inform the prompt for every shot that character appears in.
+
+DELETION:
+  Connections are removed when either endpoint is deleted, or via right-click
+  context menu.
+
+
+================================================================================
+SECTION 9 — TEXT NODES
+================================================================================
+
+Text nodes are free-form text boxes that can be placed anywhere on the canvas
+independent of images.
+
+CREATION:
+  Select the Text tool (keyboard shortcut T) and click on the canvas. A text
+  node is created at that position and immediately enters edit mode.
+
+PROPERTIES:
+  • Editable text content.
+  • Adjustable font size.
+  • Colour picker for text colour.
+  • Draggable and resizable.
+
+USE CASE:
+  Scene titles, director notes, reference annotations, section labels.
+
+
+================================================================================
+SECTION 10 — SEARCH
+================================================================================
+
+The search bar allows the user to find images on the canvas by name or label.
+
+ACTIVATION:
+  Cmd/Ctrl+F opens the search bar, which slides down from the top of the canvas.
+  Pressing Escape closes it.
+
+SEARCH BEHAVIOUR:
+  As the user types, the canvas filters visible images to show only those whose
+  label or filename contains the search string (case-insensitive). Non-matching
+  images are dimmed.
+
+RESULTS:
+  Matching images are listed in a dropdown below the search input. Clicking a
+  result pans and zooms the viewport to centre on that image.
+
+FILTER BADGES:
+  The results dropdown shows filter badges indicating how many images matched.
+
+
+================================================================================
+SECTION 11 — SHOT PANEL
+================================================================================
+
+The Shot Panel provides a sequential filmstrip view of all images ordered by
+their shot order number.
+
+OPENING:
+  Toggled from the toolbar. Slides in from the bottom of the screen.
+
+DISPLAY:
+  Each image appears as a small thumbnail in a horizontal strip. The order
+  reflects the shotOrder field of each BoardImage. Images without an explicit
+  shot order are placed at the end.
+
+REORDERING:
+  Thumbnails can be dragged and dropped to change the sequence. Reordering
+  updates the shotOrder values in the database for all affected images.
+
+USE CASE:
+  Visualising the narrative flow of a storyboard without needing to pan around
+  the canvas. The panel shows the story in linear order even if images are
+  scattered across the canvas.
+
+
+================================================================================
+SECTION 12 — TOOLS & TOOLBAR
+================================================================================
+
+ACTIVE TOOLS:
+  The toolbar (top-left of board) lets the user switch between:
+    • Select (V)  — Default mode. Click to select/drag images.
+    • Connect (C) — Draw connection lines between items.
+    • Text (T)    — Place a text node on the canvas.
+
+HEADER TOOLBAR (top of board):
+  • Project name (click to rename).
+  • Board mode toggle (I2V / Edit).
+  • Shot Panel toggle.
+  • Search button.
+  • Collaboration session button.
+  • Settings button.
+  • Undo button.
+  • Zoom level display.
+
+FLOATING TOOLBAR (per-image, on hover):
+  Each image shows a contextual toolbar with buttons to:
+    • Add a specific category note (one button per missing category).
+    • Reverse Engineer the image.
+    • Generate prompt.
+    • Connect to another image.
+    • Duplicate the image.
+    • Delete the image.
+    • Enter crop mode.
+    • Open colour picker.
+
+CONTEXT MENU (right-click on image):
+  • Duplicate.
+  • Move to another project.
+  • Delete.
+  • Enter crop mode.
+
+CONTEXT MENU (right-click on note):
+  • Duplicate note to another image.
+  • Delete note.
+
+
+================================================================================
+SECTION 13 — UNDO
+================================================================================
+
+The app maintains an undo stack for canvas actions.
+
+  • Cmd/Ctrl+Z pops the last action from the undo stack and reverses it.
+  • The undo stack is stored in the UIStore in memory (not persisted across
+    sessions).
+  • Actions that push to the undo stack include image moves, resizes, note
+    edits, deletions, and additions.
+
+
+================================================================================
+SECTION 14 — SETTINGS
+================================================================================
+
+Accessible from the Settings button in the header (or the gear icon).
+
+API KEY:
+  The user enters their OpenRouter.ai API key. It is stored in localStorage
+  under "moodboard-settings" and is never sent anywhere except the OpenRouter
+  API endpoint.
+
+MODEL SELECTION:
+  A dropdown lists all available models. The user selects which model to use
+  for all AI operations (prompt generation, reverse engineering).
+
+CUSTOM MODELS:
+  Users can add any OpenRouter model ID as a custom model. Custom models are
+  stored in localStorage and appear in the model dropdown. They can also be
+  removed.
+
+
+================================================================================
+SECTION 15 — REAL-TIME COLLABORATION
+================================================================================
+
+The app includes a peer-to-peer collaboration system built on Yjs + WebRTC.
+No server stores data — all sync happens directly between browsers.
+
+STARTING A SESSION:
+  Click the collaboration button in the header to open the session modal.
+  Options:
+    • Create a new room (generates a room ID).
+    • Join an existing room (enter a room ID).
+  The room ID appears in the URL as a query parameter (?room=ROOMID) so it
+  can be shared via link.
+
+SIGNALLING:
+  Two public WebRTC signalling servers are used:
+    • wss://signaling.yjs.dev
+    • wss://y-webrtc-signaling.onrender.com
+  STUN server: stun.l.google.com:19302
+
+DATA SYNC:
+  All canvas state (images, notes, connections, text nodes, prompt nodes) is
+  mirrored in a Yjs shared document. Changes are synced via three mechanisms:
+    1. Y.Doc update events — immediate push on every change.
+    2. 3-second polling interval — failsafe for missed events.
+    3. Manual sync button — force-pull latest state from Yjs doc.
+
+  The sync bridge uses _isRemote flags to prevent echo loops — remote changes
+  are applied locally and persisted to IndexedDB without re-pushing to Yjs.
+
+PRESENCE:
+  Each connected peer has:
+    • A display name (stored in localStorage, editable).
+    • A random colour.
+    • A cursor position (throttled to 50ms updates).
+    • An "active node" indicator (which note/image they are editing).
+    • A typing status.
+  Remote cursors are rendered as coloured pointers with name labels on the canvas.
+
+BLOB TRANSFER:
+  Images and videos must also be transferred between peers since blobs are
+  stored locally in IndexedDB. The blob transfer system works as follows:
+    1. When a peer has a blob, they broadcast a "blob offer" (blobId, filename,
+       size, MIME type) to all other peers.
+    2. Peers that don't have that blob see a download offer.
+    3. The transfer happens via WebRTC data channel.
+    4. Progress is shown in a toast notification.
+
+SESSION API KEY:
+  Peers in a session can optionally share a session-level API key so all
+  collaborators use the same key for AI operations during the session.
+
+JOINING:
+  When joining a room, a "Connecting" overlay is shown. Once the Yjs doc syncs
+  (or after a 2.5-second fallback timeout), the overlay is dismissed and the
+  user lands on the shared canvas.
+
+
+================================================================================
+SECTION 16 — STORAGE & PERSISTENCE
+================================================================================
+
+INDEXEDDB (moodboard-db, schema version 6):
+  The primary storage layer. Contains the following object stores:
+    • projects         — Project metadata
+    • images           — BoardImage records
+    • blobs            — Raw Blob objects (images, videos)
+    • connections      — Connection line records
+    • textNodes        — Text node records
+    • categoryNotes    — I2V category note records (indexed by project + image)
+    • editNotes        — Edit mode note records (indexed by project + image)
+    • promptNodes      — Generated prompt records (indexed by project + image)
+    • godModeNodes     — Global instruction node records
+
+  Schema migrations are handled incrementally: each version upgrade creates
+  new object stores or indexes without destroying existing data.
+
+LOCALSTORAGE:
+  • API key, selected model, custom models (key: "moodboard-settings").
+  • Collaboration display name (key: "moodboard-local-name").
+
+BLOB URL CACHE:
+  Blob URLs (createObjectURL) are cached in a memory Map (blobId → URL).
+  A version counter per blob ID tracks invalidation. When a blob is updated
+  (e.g., after crop), the old URL is revoked and listeners are notified to
+  re-fetch. This pattern avoids memory leaks from stale object URLs.
+
+
+================================================================================
+SECTION 17 — KEYBOARD SHORTCUTS
+================================================================================
+
+  Cmd/Ctrl + Z         — Undo last action
+  Cmd/Ctrl + F         — Open / focus search bar
+  Cmd/Ctrl + D         — Duplicate selected image(s) + notes
+  Cmd/Ctrl + 1         — Switch to I2V mode
+  Cmd/Ctrl + 2         — Switch to Edit mode
+  Ctrl + A / Cmd + A  — Select all images
+  V                    — Switch to Select tool
+  C                    — Switch to Connect tool
+  T                    — Switch to Text tool
+  Delete / Backspace   — Delete selected image(s)
+  Escape               — Close search → unfocus image → close panels → clear selection
+  Space + Drag         — Pan the canvas
+
+  Note: shortcuts are suppressed when an input or textarea has focus to avoid
+  interfering with typing.
+
+
+================================================================================
+SECTION 18 — VISUAL DESIGN & ANIMATIONS
+================================================================================
+
+COLOR SCHEME:
+  Dark UI with a near-black background (#07080e primary, #0d0e18 secondary).
+  Text is off-white (#e2e4f0). The primary accent colour is orange (#f97316).
+  Panels use a glassmorphic style: semi-transparent backgrounds with
+  backdrop-blur and saturate filters.
+
+TYPOGRAPHY:
+  • Inter — primary UI font.
+  • JetBrains Mono — labels, code-like UI elements.
+
+ANIMATIONS:
+  • nodeAppear        — Scale + fade in when a note or node is created.
+  • scanSweep         — A horizontal scan line sweeps across an image on load,
+                         suggesting it is being "read" by AI.
+  • copyFlash         — A cyan glow flash on an element when it is copied.
+  • drawLine          — Connection lines stroke themselves in on creation.
+  • connPulse         — Connection lines show a flowing animated dash pattern.
+  • panelSlideIn      — Side panels slide in from the edge.
+  • modalSlideUp      — Modals slide up from the bottom.
+  • searchSlideDown   — Search bar slides down from the top.
+  • Hover states      — Subtle scale-up and glow on interactive elements.
+  • Focus dimming     — Non-focused canvas items fade to 15% opacity with blur.
+
+TOUCH SUPPORT:
+  A module-level IS_TOUCH constant detects touch devices. On touch devices,
+  interactive controls are always visible rather than appearing only on hover,
+  and touch-friendly minimum tap target sizes (36px) are enforced.
+
+
+================================================================================
+END OF DOCUMENT
+================================================================================
