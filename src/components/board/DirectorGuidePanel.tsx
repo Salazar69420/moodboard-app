@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { DirectorGuide } from '../../types';
 
@@ -24,6 +24,7 @@ export function DirectorGuidePanel({
   anchorY,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const [expandedOption, setExpandedOption] = useState<string | null>(null);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -82,6 +83,10 @@ export function DirectorGuidePanel({
         @keyframes dirGuideIn {
           from { opacity: 0; transform: scale(0.96) translateX(-4px); }
           to   { opacity: 1; transform: scale(1)    translateX(0);     }
+        }
+        @keyframes subOptsIn {
+          from { opacity: 0; transform: translateY(-4px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
 
@@ -152,101 +157,196 @@ export function DirectorGuidePanel({
 
       {/* Options */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {guide.options.map((opt) => (
-          <button
-            key={opt.name}
-            onClick={(e) => { e.stopPropagation(); onInsert(opt.insert); }}
-            onPointerDown={(e) => e.stopPropagation()}
-            style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: 8,
-              padding: '7px 9px',
-              borderRadius: 9,
-              background: 'rgba(255,255,255,0.025)',
-              border: '1px solid rgba(255,255,255,0.055)',
-              cursor: 'pointer',
-              textAlign: 'left',
-              transition: 'all 0.12s ease',
-              width: '100%',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = `${categoryColor}10`;
-              e.currentTarget.style.borderColor = `${categoryColor}30`;
-              const plus = e.currentTarget.querySelector('.insert-plus') as HTMLElement;
-              if (plus) { plus.style.background = `${categoryColor}25`; plus.style.borderColor = `${categoryColor}50`; plus.style.color = categoryColor; }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(255,255,255,0.025)';
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.055)';
-              const plus = e.currentTarget.querySelector('.insert-plus') as HTMLElement;
-              if (plus) { plus.style.background = `${categoryColor}0a`; plus.style.borderColor = `${categoryColor}20`; plus.style.color = `${categoryColor}60`; }
-            }}
-          >
-            {/* Name chip */}
-            <div style={{
-              minWidth: 36,
-              fontSize: 8,
-              fontFamily: "'JetBrains Mono', monospace",
-              color: categoryColor,
-              fontWeight: 800,
-              letterSpacing: '0.06em',
-              paddingTop: 2,
-              flexShrink: 0,
-              textTransform: 'uppercase',
-            }}>
-              {opt.name}
-            </div>
+        {guide.options.map((opt) => {
+          const isExpanded = expandedOption === opt.name;
+          const hasSubOptions = opt.subOptions && opt.subOptions.length > 0;
 
-            {/* Text content */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              {opt.label && (
+          return (
+            <div key={opt.name}>
+              <button
+                onClick={(e) => { e.stopPropagation(); onInsert(opt.insert); }}
+                onPointerDown={(e) => e.stopPropagation()}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 8,
+                  padding: '7px 9px',
+                  borderRadius: isExpanded ? '9px 9px 0 0' : 9,
+                  background: isExpanded ? `${categoryColor}14` : 'rgba(255,255,255,0.025)',
+                  border: isExpanded ? `1px solid ${categoryColor}35` : '1px solid rgba(255,255,255,0.055)',
+                  borderBottom: isExpanded ? 'none' : undefined,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.12s ease',
+                  width: '100%',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isExpanded) {
+                    e.currentTarget.style.background = `${categoryColor}10`;
+                    e.currentTarget.style.borderColor = `${categoryColor}30`;
+                  }
+                  const plus = e.currentTarget.querySelector('.insert-plus') as HTMLElement;
+                  if (plus) { plus.style.background = `${categoryColor}25`; plus.style.borderColor = `${categoryColor}50`; plus.style.color = categoryColor; }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isExpanded) {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.025)';
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.055)';
+                  }
+                  const plus = e.currentTarget.querySelector('.insert-plus') as HTMLElement;
+                  if (plus) { plus.style.background = `${categoryColor}0a`; plus.style.borderColor = `${categoryColor}20`; plus.style.color = `${categoryColor}60`; }
+                }}
+              >
+                {/* Name chip */}
                 <div style={{
-                  fontSize: 10,
-                  color: 'rgba(255,255,255,0.72)',
-                  fontFamily: "'Inter', system-ui, sans-serif",
-                  fontWeight: 500,
-                  marginBottom: 2,
-                  lineHeight: 1.3,
+                  minWidth: 36,
+                  fontSize: 8,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  color: categoryColor,
+                  fontWeight: 800,
+                  letterSpacing: '0.06em',
+                  paddingTop: 2,
+                  flexShrink: 0,
+                  textTransform: 'uppercase',
                 }}>
-                  {opt.label}
+                  {opt.name}
+                </div>
+
+                {/* Text content */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {opt.label && (
+                    <div style={{
+                      fontSize: 10,
+                      color: 'rgba(255,255,255,0.72)',
+                      fontFamily: "'Inter', system-ui, sans-serif",
+                      fontWeight: 500,
+                      marginBottom: 2,
+                      lineHeight: 1.3,
+                    }}>
+                      {opt.label}
+                    </div>
+                  )}
+                  <div style={{
+                    fontSize: 9,
+                    color: 'rgba(255,255,255,0.35)',
+                    fontFamily: "'Inter', system-ui, sans-serif",
+                    lineHeight: 1.45,
+                  }}>
+                    {opt.effect}
+                  </div>
+                </div>
+
+                {/* Expand chevron (if sub-options exist) */}
+                {hasSubOptions && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedOption(isExpanded ? null : opt.name);
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    style={{
+                      width: 17,
+                      height: 17,
+                      borderRadius: 5,
+                      background: isExpanded ? `${categoryColor}20` : 'rgba(255,255,255,0.04)',
+                      border: isExpanded ? `1px solid ${categoryColor}40` : '1px solid rgba(255,255,255,0.08)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: isExpanded ? categoryColor : 'rgba(255,255,255,0.3)',
+                      fontSize: 8,
+                      flexShrink: 0,
+                      marginTop: 1,
+                      cursor: 'pointer',
+                      transition: 'all 0.12s ease',
+                      lineHeight: 1,
+                      padding: 0,
+                      transform: isExpanded ? 'rotate(180deg)' : 'none',
+                    }}
+                    title="Show variants"
+                  >
+                    ▾
+                  </button>
+                )}
+
+                {/* Insert + button */}
+                <div
+                  className="insert-plus"
+                  style={{
+                    width: 17,
+                    height: 17,
+                    borderRadius: 5,
+                    background: `${categoryColor}0a`,
+                    border: `1px solid ${categoryColor}20`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: `${categoryColor}60`,
+                    fontSize: 11,
+                    flexShrink: 0,
+                    marginTop: 1,
+                    fontWeight: 700,
+                    transition: 'all 0.12s ease',
+                    lineHeight: 1,
+                  }}
+                >
+                  +
+                </div>
+              </button>
+
+              {/* Sub-options row */}
+              {isExpanded && hasSubOptions && (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 4,
+                    padding: '7px 9px 8px',
+                    background: `${categoryColor}08`,
+                    border: `1px solid ${categoryColor}35`,
+                    borderTop: 'none',
+                    borderRadius: '0 0 9px 9px',
+                    animation: 'subOptsIn 0.14s ease forwards',
+                  }}
+                >
+                  {opt.subOptions!.map((sub) => (
+                    <button
+                      key={sub.name}
+                      onClick={(e) => { e.stopPropagation(); onInsert(sub.insert); }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: 6,
+                        background: 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${categoryColor}25`,
+                        color: 'rgba(255,255,255,0.6)',
+                        fontSize: 9,
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        letterSpacing: '0.04em',
+                        transition: 'all 0.1s ease',
+                        lineHeight: 1.4,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = `${categoryColor}20`;
+                        e.currentTarget.style.borderColor = `${categoryColor}55`;
+                        e.currentTarget.style.color = categoryColor;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                        e.currentTarget.style.borderColor = `${categoryColor}25`;
+                        e.currentTarget.style.color = 'rgba(255,255,255,0.6)';
+                      }}
+                    >
+                      {sub.name}
+                    </button>
+                  ))}
                 </div>
               )}
-              <div style={{
-                fontSize: 9,
-                color: 'rgba(255,255,255,0.35)',
-                fontFamily: "'Inter', system-ui, sans-serif",
-                lineHeight: 1.45,
-              }}>
-                {opt.effect}
-              </div>
             </div>
-
-            {/* Insert + button */}
-            <div
-              className="insert-plus"
-              style={{
-                width: 17,
-                height: 17,
-                borderRadius: 5,
-                background: `${categoryColor}0a`,
-                border: `1px solid ${categoryColor}20`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: `${categoryColor}60`,
-                fontSize: 11,
-                flexShrink: 0,
-                marginTop: 1,
-                fontWeight: 700,
-                transition: 'all 0.12s ease',
-                lineHeight: 1,
-              }}
-            >
-              +
-            </div>
-          </button>
-        ))}
+          );
+        })}
       </div>
 
       {/* Footer hint */}
@@ -263,7 +363,7 @@ export function DirectorGuidePanel({
         gap: 4,
       }}>
         <span style={{ color: `${categoryColor}50`, fontWeight: 700 }}>+</span>
-        <span>click any option to append to note</span>
+        <span>click option to insert · ▾ for variants</span>
       </div>
     </div>,
     document.body
