@@ -725,7 +725,11 @@ export function ImageContextMenu() {
                   if (!currentProjectId || !image) return;
                   setReverseLoading(true);
                   try {
-                    const result = await reverseEngineerI2V(apiKey, model, image.blobId, image.mimeType, godModeNodes);
+                    const i2vExisting: Record<string, string> = {};
+                    for (const note of categoryNotes.filter(n => n.imageId === image.id)) {
+                      if (note.text.trim()) i2vExisting[note.categoryId] = note.text;
+                    }
+                    const result = await reverseEngineerI2V(apiKey, model, image.blobId, image.mimeType, godModeNodes, Object.keys(i2vExisting).length > 0 ? i2vExisting : undefined);
                     const displayW = image.displayWidth ?? Math.min(image.width, 350);
                     let noteY = image.y + 20;
                     for (const cat of SHOT_CATEGORIES) {
@@ -767,7 +771,11 @@ export function ImageContextMenu() {
                   if (!currentProjectId || !image) return;
                   setReverseLoading(true);
                   try {
-                    const result = await reverseEngineerEdit(apiKey, model, image.blobId, image.mimeType, godModeNodes);
+                    const editExisting: Record<string, string> = {};
+                    for (const note of editNotes.filter(n => n.imageId === image.id)) {
+                      if (note.text.trim()) editExisting[note.categoryId] = note.text;
+                    }
+                    const result = await reverseEngineerEdit(apiKey, model, image.blobId, image.mimeType, godModeNodes, Object.keys(editExisting).length > 0 ? editExisting : undefined);
                     const displayW = image.displayWidth ?? Math.min(image.width, 350);
                     let noteY = image.y + 20;
                     for (const cat of EDIT_CATEGORIES) {

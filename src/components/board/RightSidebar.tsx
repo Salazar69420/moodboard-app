@@ -109,11 +109,26 @@ export function RightSidebar() {
     setAiLoadingCat(categoryId);
     try {
       const model = settingsModel || 'anthropic/claude-opus-4-6';
+
+      // Collect all existing note text for this image (saved notes + unsaved drafts)
+      // so the AI uses the director's context as ground truth, not its own invention
+      const existingNotes: Record<string, string> = {};
+      const allNotes = boardMode === 'i2v'
+        ? categoryNotes.filter(n => n.imageId === selectedImage.id)
+        : editNotes.filter(n => n.imageId === selectedImage.id);
+      for (const note of allNotes) {
+        if (note.text.trim()) existingNotes[note.categoryId] = note.text;
+      }
+      for (const [catId, draftText] of Object.entries(drafts)) {
+        if (draftText.trim()) existingNotes[catId] = draftText;
+      }
+
       const text = await reverseEngineerSingleCategory(
         apiKey, model,
         selectedImage.blobId, selectedImage.mimeType,
         categoryId as ShotCategoryId | EditCategoryId,
         useBoardStore.getState().godModeNodes,
+        Object.keys(existingNotes).length > 0 ? existingNotes : undefined,
       );
 
       const noteId = await ensureNote(categoryId);

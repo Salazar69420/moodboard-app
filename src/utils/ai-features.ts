@@ -25,6 +25,8 @@ async function imageToBase64(blobId: string): Promise<{ base64: string; mimeType
 /**
  * Reverse-engineer a single note category from an image (F4).
  * Returns plain text for that one category only.
+ * If existingNotes are provided, they act as the director's ground truth —
+ * the AI builds on their intent rather than generating from scratch.
  */
 export async function reverseEngineerSingleCategory(
   apiKey: string,
@@ -33,6 +35,7 @@ export async function reverseEngineerSingleCategory(
   mimeType: string,
   categoryId: ShotCategoryId | EditCategoryId,
   godModeNodes: GodModeNode[] = [],
+  existingNotes?: Record<string, string>,
 ): Promise<string> {
   const imgData = await imageToBase64(blobId);
   if (!imgData) throw new Error('Could not load image data');
@@ -44,10 +47,45 @@ export async function reverseEngineerSingleCategory(
   const catPrompts = cat?.prompts || [];
 
   const questionsText = catPrompts.length > 0
-    ? `\n\nAddress these specific questions in your response:\n${catPrompts.map(p => `- ${p}`).join('\n')}`
+    ? `\nAddress these specific questions:\n${catPrompts.map(p => `- ${p}`).join('\n')}`
     : '';
 
-  let systemPrompt = `You are a professional film/image analyst with deep expertise in cinematography, photography, and visual storytelling.
+  // Separate existing notes into: the target field vs all other fields
+  const allCategories = [...SHOT_CATEGORIES, ...EDIT_CATEGORIES];
+  const filledNotes = existingNotes
+    ? Object.entries(existingNotes).filter(([, v]) => v.trim())
+    : [];
+  const currentFieldText = existingNotes?.[categoryId]?.trim() || '';
+  const otherFilledNotes = filledNotes.filter(([k]) => k !== categoryId);
+  const hasDirectorContext = filledNotes.length > 0;
+
+  let systemPrompt: string;
+
+  if (hasDirectorContext) {
+    // Director has written context — use it as the primary creative source
+    const otherNotesFormatted = otherFilledNotes.length > 0
+      ? otherFilledNotes.map(([k, v]) => {
+          const label = allCategories.find(c => c.id === k)?.label || k;
+          return `  • ${label}: ${v}`;
+        }).join('\n')
+      : '';
+
+    systemPrompt = `You are the director's creative co-pilot. Your job is to write the "${catLabel}" field for this shot.
+
+THE DIRECTOR'S NOTES ARE YOUR GROUND TRUTH. Their vision, tone, and intent come first. The reference image is a secondary visual aid — use it only to fill in details the director hasn't specified.
+
+${otherNotesFormatted ? `DIRECTOR'S ESTABLISHED VISION FOR THIS SHOT:\n${otherNotesFormatted}\n` : ''}${currentFieldText ? `DIRECTOR HAS STARTED THIS FIELD ("${catLabel}"):\n  "${currentFieldText}"\n→ Expand and complete this. Stay in their voice. Do not replace their words — build from them.\n` : `FILL THIS FIELD: "${catLabel}"\n→ Use the image as visual reference, but keep it fully consistent with the director's vision above.\n`}
+${questionsText}
+
+RULES:
+1. Honor the director's creative direction — never introduce a conflicting vibe, aesthetic, or style
+2. Match their tone exactly: if they wrote casually, be casual; if technical, be technical; if poetic, be poetic
+3. Use the image to add specific visual detail (lens, light quality, framing) that the director's notes leave open
+4. Write in filmmaker's shorthand: concise, specific, actionable
+5. No JSON, no markdown, no headers — plain text only for the "${catLabel}" field`;
+  } else {
+    // No director context — pure image analysis
+    systemPrompt = `You are a professional film/image analyst with deep expertise in cinematography, photography, and visual storytelling.
 
 Your task: analyze the provided image and describe ONLY the "${catLabel}" aspect in precise, technical detail.
 
@@ -57,6 +95,7 @@ RULES:
 3. Write in filmmaker's shorthand: concise, professional, actionable
 4. No JSON, no markdown, no headers, no explanation — just the description
 5. If something is ambiguous, make your best professional inference${questionsText}`;
+  }
 
   const activeGodNodes = godModeNodes.filter(g => g.isEnabled && g.text.trim());
   if (activeGodNodes.length > 0) {
@@ -65,6 +104,10 @@ RULES:
       systemPrompt += `${gn.title ? `${gn.title}: ` : ''}${gn.text.trim()}\n`;
     }
   }
+
+  const userText = hasDirectorContext
+    ? `Using the director's notes as your primary reference and the image as visual context, write the "${catLabel}" field. Stay true to their vision and tone. Plain text only.`
+    : `Analyze this ${mimeType?.includes('video') ? 'video frame' : 'image'} and describe ONLY the "${catLabel}" aspect. Be specific and technical. Plain text only.`;
 
   const messages = [
     { role: 'system', content: systemPrompt },
@@ -77,7 +120,7 @@ RULES:
         },
         {
           type: 'text',
-          text: `Analyze this ${mimeType?.includes('video') ? 'video frame' : 'image'} and describe ONLY the "${catLabel}" aspect. Be specific and technical. Plain text only.`,
+          text: userText,
         },
       ],
     },

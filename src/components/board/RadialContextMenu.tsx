@@ -117,8 +117,20 @@ export function RadialContextMenu() {
         try {
           const model = settingsModel || 'anthropic/claude-opus-4-6';
           const godNodes = useBoardStore.getState().godModeNodes;
+          const boardState = useBoardStore.getState();
+
+          // Collect existing notes so the AI preserves the director's context
+          const existingNotes: Record<string, string> = {};
+          const savedNotes = boardMode === 'i2v'
+            ? boardState.categoryNotes.filter(n => n.imageId === image.id)
+            : boardState.editNotes.filter(n => n.imageId === image.id);
+          for (const note of savedNotes) {
+            if (note.text.trim()) existingNotes[note.categoryId] = note.text;
+          }
+          const contextNotes = Object.keys(existingNotes).length > 0 ? existingNotes : undefined;
+
           if (boardMode === 'i2v') {
-            const result = await reverseEngineerI2V(apiKey, model, image.blobId, image.mimeType, godNodes);
+            const result = await reverseEngineerI2V(apiKey, model, image.blobId, image.mimeType, godNodes, contextNotes);
             for (const [catId, text] of Object.entries(result.notes)) {
               if (!text) continue;
               const existing = useBoardStore.getState().categoryNotes.find(n => n.imageId === image.id && n.categoryId === catId);
@@ -133,7 +145,7 @@ export function RadialContextMenu() {
               }
             }
           } else {
-            const result = await reverseEngineerEdit(apiKey, model, image.blobId, image.mimeType, godNodes);
+            const result = await reverseEngineerEdit(apiKey, model, image.blobId, image.mimeType, godNodes, contextNotes);
             for (const [catId, text] of Object.entries(result.notes)) {
               if (!text) continue;
               const existing = useBoardStore.getState().editNotes.find(n => n.imageId === image.id && n.categoryId === catId);
