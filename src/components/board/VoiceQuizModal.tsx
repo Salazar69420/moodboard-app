@@ -1,6 +1,8 @@
 import { createPortal } from 'react-dom';
 import { useRef, useEffect, useState } from 'react';
 import { useVoiceQuiz } from '../../hooks/useVoiceQuiz';
+import { useImageStore } from '../../stores/useImageStore';
+import { useBlobUrl } from '../../hooks/useBlobUrl';
 import type { FilledField } from '../../utils/voice-quiz';
 
 // ─── Status indicator styles ─────────────────────────────────────────────────
@@ -31,6 +33,11 @@ function VoiceQuizOverlay({ quiz }: { quiz: ReturnType<typeof useVoiceQuiz> }) {
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
 
+  // Resolve image for display
+  const images = useImageStore((s) => s.images);
+  const image = images.find(img => img.id === quiz.imageId);
+  const imageUrl = useBlobUrl(image?.blobId ?? null);
+
   // Auto-scroll messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -45,8 +52,8 @@ function VoiceQuizOverlay({ quiz }: { quiz: ReturnType<typeof useVoiceQuiz> }) {
         style={{
           position: 'fixed',
           inset: 0,
-          backgroundColor: 'rgba(0,0,0,0.6)',
-          backdropFilter: 'blur(2px)',
+          backgroundColor: 'rgba(0,0,0,0.75)',
+          backdropFilter: 'blur(1px)',
           zIndex: 9998,
           transition: 'all 0.4s ease',
         }}
@@ -60,9 +67,9 @@ function VoiceQuizOverlay({ quiz }: { quiz: ReturnType<typeof useVoiceQuiz> }) {
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          width: 480,
-          maxWidth: '90vw',
-          maxHeight: '80vh',
+          width: 560,
+          maxWidth: '92vw',
+          maxHeight: '88vh',
           background: '#0a0b10',
           border: '1px solid #1e1e2e',
           borderRadius: 16,
@@ -172,6 +179,57 @@ function VoiceQuizOverlay({ quiz }: { quiz: ReturnType<typeof useVoiceQuiz> }) {
             }}>
               {quiz.filledFields.filter(f => !f.wasRejected).length}/{quiz.allFields.length} fields
             </span>
+          </div>
+        )}
+
+        {/* Image panel — always visible when image is available */}
+        {imageUrl && (
+          <div style={{
+            flexShrink: 0,
+            maxHeight: 220,
+            overflow: 'hidden',
+            borderBottom: '1px solid #1a1a2a',
+            position: 'relative',
+          }}>
+            <img
+              src={imageUrl}
+              alt="Reference"
+              style={{
+                width: '100%',
+                height: '100%',
+                maxHeight: 220,
+                objectFit: 'cover',
+                display: 'block',
+              }}
+            />
+            {/* Subtle gradient overlay at bottom so text/dots don't clash */}
+            <div style={{
+              position: 'absolute',
+              bottom: 0, left: 0, right: 0,
+              height: 40,
+              background: 'linear-gradient(to top, rgba(10,11,16,0.85) 0%, transparent 100%)',
+              pointerEvents: 'none',
+            }} />
+            {/* Category label badge */}
+            {quiz.categoryId && (
+              <div style={{
+                position: 'absolute',
+                top: 10, left: 10,
+                fontSize: 10,
+                fontFamily: "'JetBrains Mono', monospace",
+                color: '#e5e5e5',
+                background: 'rgba(10,11,16,0.75)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 5,
+                padding: '3px 8px',
+                backdropFilter: 'blur(8px)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                fontWeight: 700,
+              }}>
+                {quiz.categoryId.replace('edit-', '')}
+              </div>
+            )}
           </div>
         )}
 
