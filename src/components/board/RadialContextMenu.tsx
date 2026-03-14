@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useUIStore } from '../../stores/useUIStore';
 import { useBoardStore } from '../../stores/useBoardStore';
 import { useImageStore } from '../../stores/useImageStore';
@@ -9,6 +9,7 @@ import type { ShotCategoryId, EditCategoryId } from '../../types';
 import { reverseEngineerI2V, reverseEngineerEdit } from '../../utils/reverse-engineer';
 import { generateImageName } from '../../utils/ai-features';
 import { downloadMedia } from '../../utils/download';
+import { CategoryPickerPanel } from './CategoryPickerPanel';
 
 interface RadialMenuItem {
   label: string;
@@ -27,6 +28,8 @@ export function RadialContextMenu() {
   const boardMode = useBoardStore((s) => s.boardMode);
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [noteVersion, setNoteVersion] = useState(0);
 
   // Close when clicking outside
   useEffect(() => {
@@ -101,6 +104,16 @@ export function RadialContextMenu() {
         }
         showToast(`${added} notes added`);
         hideContextMenu();
+      },
+    });
+
+    // Add single note (picker)
+    items.push({
+      label: 'Add Note',
+      icon: '＋',
+      color: '#a78bfa',
+      action: () => {
+        setPickerOpen(true);
       },
     });
 
@@ -230,6 +243,43 @@ export function RadialContextMenu() {
     return items;
   }, [image, boardMode, currentProjectId, hideContextMenu, showToast]);
 
+  // Close picker when context menu closes
+  useEffect(() => {
+    if (!contextMenu.visible) setPickerOpen(false);
+  }, [contextMenu.visible]);
+
+  const addedIds = useMemo(() => {
+    if (!image) return new Set<string>();
+    const notes = boardMode === 'i2v'
+      ? useBoardStore.getState().categoryNotes.filter(n => n.imageId === image.id)
+      : useBoardStore.getState().editNotes.filter(n => n.imageId === image.id);
+    return new Set(notes.map(n => n.categoryId));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [image, boardMode, contextMenu.visible, noteVersion]);
+
+  const handleAddNote = useCallback(async (categoryId: string) => {
+    if (!image || !currentProjectId) return;
+    const notes = boardMode === 'i2v'
+      ? useBoardStore.getState().categoryNotes.filter(n => n.imageId === image.id)
+      : useBoardStore.getState().editNotes.filter(n => n.imageId === image.id);
+    const existingCount = notes.length;
+    if (boardMode === 'i2v') {
+      await useBoardStore.getState().addCategoryNote(
+        currentProjectId, image.id, categoryId as ShotCategoryId,
+        image.x + (image.displayWidth || 350) + 60,
+        image.y + existingCount * 180,
+      );
+    } else {
+      await useBoardStore.getState().addEditNote(
+        currentProjectId, image.id, categoryId as EditCategoryId,
+        image.x + (image.displayWidth || 350) + 60,
+        image.y + existingCount * 180,
+      );
+    }
+    showToast('Note added');
+    setNoteVersion(v => v + 1);
+  }, [image, boardMode, currentProjectId, showToast]);
+
   if (!contextMenu.visible || !image) return null;
 
   const totalItems = menuItems.length;
@@ -258,6 +308,18 @@ export function RadialContextMenu() {
         boxShadow: '0 0 16px rgba(249,115,22,0.4)',
         transform: 'translate(-50%, -50%)',
       }} />
+
+      {/* Category picker panel */}
+      {pickerOpen && (
+        <CategoryPickerPanel
+          categories={boardMode === 'i2v' ? SHOT_CATEGORIES : EDIT_CATEGORIES}
+          addedIds={addedIds}
+          anchorX={contextMenu.x}
+          anchorY={contextMenu.y}
+          onAdd={handleAddNote}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
 
       {/* Radial items */}
       {menuItems.map((item, idx) => {
