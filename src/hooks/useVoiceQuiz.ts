@@ -88,6 +88,9 @@ const _streamRef      = { current: null as MediaStream | null };
 
 // Persist filled fields per noteId across sessions (survives End Session / reopen)
 const _savedFields = new Map<string, FilledField[]>();
+// Cross-node memory: maps noteId → { imageId, categoryId, categoryLabel } so we can
+// look up voice sessions from sibling nodes sharing the same reference image.
+const _sessionMeta = new Map<string, { imageId: string; categoryId: string; categoryLabel: string }>();
 const _pauseTimerRef  = { current: null as ReturnType<typeof setTimeout> | null };
 const _chunksRef      = { current: [] as BlobPart[] };
 
@@ -135,17 +138,33 @@ export function useVoiceQuiz() {
 
   function buildCrossNodeContext(noteId: string, noteType: 'category' | 'edit', imageId: string): string {
     const boardState = useBoardStore.getState();
+    const allCats = [...SHOT_CATEGORIES, ...EDIT_CATEGORIES];
+    const parts: string[] = [];
+
+    // 1. Written note text from sibling nodes
     const allNotes = noteType === 'category'
       ? boardState.categoryNotes.filter(n => n.imageId === imageId && n.id !== noteId && n.text.trim())
       : boardState.editNotes.filter(n => n.imageId === imageId && n.id !== noteId && n.text.trim());
 
-    if (allNotes.length === 0) return 'No other nodes filled yet.';
-
-    const allCats = [...SHOT_CATEGORIES, ...EDIT_CATEGORIES];
-    return allNotes.map(n => {
+    for (const n of allNotes) {
       const cat = allCats.find(c => c.id === n.categoryId);
-      return `${cat?.label || n.categoryId}: ${n.text.trim()}`;
-    }).join('\n');
+      parts.push(`${cat?.label || n.categoryId}: ${n.text.trim()}`);
+    }
+
+    // 2. Voice session memory from sibling nodes (even if not yet written to note text)
+    for (const [siblingId, meta] of _sessionMeta.entries()) {
+      if (siblingId === noteId || meta.imageId !== imageId) continue;
+      // Skip if we already have written text for this node above
+      if (allNotes.some(n => n.id === siblingId)) continue;
+      const fields = _savedFields.get(siblingId);
+      if (!fields || fields.length === 0) continue;
+      const activeFields = fields.filter(f => !f.wasRejected);
+      if (activeFields.length === 0) continue;
+      const summary = activeFields.map(f => `${f.fieldLabel}: ${f.value}`).join(', ');
+      parts.push(`${meta.categoryLabel} (from voice session): ${summary}`);
+    }
+
+    return parts.length > 0 ? parts.join('\n') : 'No other nodes filled yet.';
   }
 
   const openQuiz = useCallback(async (noteId: string, noteType: 'category' | 'edit') => {
@@ -195,6 +214,13 @@ export function useVoiceQuiz() {
 
       // 5. Analyze image
       const imageDescription = await analyzeImageForContext(openRouterKey, imgData.base64, imgData.mimeType);
+
+      // Save session metadata for cross-node memory
+      _sessionMeta.set(noteId, {
+        imageId,
+        categoryId,
+        categoryLabel: getCategoryLabel(categoryId),
+      });
 
       _set({
         categoryId,
