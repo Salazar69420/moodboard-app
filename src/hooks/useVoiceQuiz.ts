@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { useRef, useCallback, useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useBoardStore } from '../stores/useBoardStore';
 import { useImageStore } from '../stores/useImageStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
@@ -80,15 +80,25 @@ export const useVoiceQuizStore = create<VoiceQuizStore>((set) => ({
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
+// Module-level refs shared across all hook instances.
+// This ensures closeQuiz/stopAllMedia always reaches the active media,
+// regardless of which component called useVoiceQuiz().
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _recognitionRef = { current: null as any };
+const _recorderRef    = { current: null as MediaRecorder | null };
+const _audioRef       = { current: null as HTMLAudioElement | null };
+const _streamRef      = { current: null as MediaStream | null };
+const _pauseTimerRef  = { current: null as ReturnType<typeof setTimeout> | null };
+const _chunksRef      = { current: [] as BlobPart[] };
+
 export function useVoiceQuiz() {
   const store = useVoiceQuizStore();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const chunksRef = useRef<BlobPart[]>([]);
+  const recognitionRef = _recognitionRef;
+  const recorderRef    = _recorderRef;
+  const audioRef       = _audioRef;
+  const streamRef      = _streamRef;
+  const pauseTimerRef  = _pauseTimerRef;
+  const chunksRef      = _chunksRef;
 
   // Cleanup on unmount
   useEffect(() => {
