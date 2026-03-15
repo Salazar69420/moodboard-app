@@ -223,65 +223,61 @@ export function useVoiceQuiz() {
         return;
       }
 
-      // Add AI message
+      // Add AI message then go straight to listening (no TTS)
       const newMessages = [...state.messages, { role: 'ai' as const, text: question }];
       state._set({ messages: newMessages });
 
-      // Speak it
-      state._set({ status: 'speaking' });
-      const audioUrl = await speakText(openAiKey, question);
-      state._set({ currentAudioUrl: audioUrl });
-
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
-      audio.onended = () => {
-        startListening();
-      };
-      audio.onerror = () => {
-        // If TTS fails, skip to listening
-        startListening();
-      };
-      audio.play().catch(() => {
-        // Autoplay blocked — go straight to listening
-        startListening();
-      });
+      if (!useVoiceQuizStore.getState().isOpen) return;
+      startListening();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Question generation failed';
       state._set({ status: 'error', errorMessage: msg });
     }
   }
 
+  // Spawns a fresh SpeechRecognition instance and auto-restarts on browser cutoff.
+  // A fresh instance is required because browsers reject .start() on a used instance.
+  function spawnRecognition() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) return;
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onresult = (event: any) => {
+      let transcript = '';
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      useVoiceQuizStore.getState()._set({ liveTranscript: transcript });
+    };
+
+    recognition.onerror = () => { /* ignore — onend will handle restart */ };
+
+    // Browser silently ends recognition after silence even with continuous=true.
+    // Restart with a NEW instance (calling .start() on a stopped instance fails).
+    // Only restart if status is still 'listening' (manual stop sets it to 'processing' first).
+    recognition.onend = () => {
+      if (useVoiceQuizStore.getState().status === 'listening') {
+        spawnRecognition();
+      }
+    };
+
+    try {
+      recognition.start();
+      recognitionRef.current = recognition;
+    } catch { /* */ }
+  }
+
   function startListening() {
     const state = useVoiceQuizStore.getState();
     state._set({ status: 'listening', liveTranscript: '' });
 
-    // Web Speech API for live display
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (SpeechRecognitionCtor) {
-      const recognition = new SpeechRecognitionCtor();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      recognition.onresult = (event: any) => {
-        const interim = Array.from(event.results as ArrayLike<{ 0: { transcript: string } }>)
-          .map((r: { 0: { transcript: string } }) => r[0].transcript).join('');
-        useVoiceQuizStore.getState()._set({ liveTranscript: interim });
-
-        // Reset pause timer on speech
-        if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
-        pauseTimerRef.current = setTimeout(() => stopListening(), 1500);
-      };
-
-      recognition.onerror = () => { /* continue with recorder */ };
-
-      try {
-        recognition.start();
-        recognitionRef.current = recognition;
-      } catch { /* */ }
-    }
+    spawnRecognition();
 
     // MediaRecorder for actual audio capture
     navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
@@ -307,15 +303,15 @@ export function useVoiceQuiz() {
       };
       recorder.start();
       recorderRef.current = recorder;
-
-      // Initial pause timer — 3s for first silence
-      pauseTimerRef.current = setTimeout(() => stopListening(), 3000);
     }).catch(() => {
       useVoiceQuizStore.getState()._set({ status: 'error', errorMessage: 'Microphone access denied' });
     });
   }
 
   function stopListening() {
+    // Flip status immediately so spawnRecognition's onend guard won't restart listening
+    useVoiceQuizStore.getState()._set({ status: 'processing' });
+
     if (pauseTimerRef.current) {
       clearTimeout(pauseTimerRef.current);
       pauseTimerRef.current = null;
