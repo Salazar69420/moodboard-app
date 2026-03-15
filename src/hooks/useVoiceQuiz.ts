@@ -80,13 +80,14 @@ export const useVoiceQuizStore = create<VoiceQuizStore>((set) => ({
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
 // Module-level refs shared across all hook instances.
-// This ensures closeQuiz/stopAllMedia always reaches the active media,
-// regardless of which component called useVoiceQuiz().
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const _recognitionRef = { current: null as any };
 const _recorderRef    = { current: null as MediaRecorder | null };
 const _audioRef       = { current: null as HTMLAudioElement | null };
 const _streamRef      = { current: null as MediaStream | null };
+
+// Persist filled fields per noteId across sessions (survives End Session / reopen)
+const _savedFields = new Map<string, FilledField[]>();
 const _pauseTimerRef  = { current: null as ReturnType<typeof setTimeout> | null };
 const _chunksRef      = { current: [] as BlobPart[] };
 
@@ -186,9 +187,11 @@ export function useVoiceQuiz() {
       // 3. Cross-node context
       const crossNodeContext = buildCrossNodeContext(noteId, noteType, imageId);
 
-      // 4. Get fields for this category
+      // 4. Get fields for this category, restoring any previously filled fields
       const allFields = getCategoryFields(categoryId);
-      const emptyFields = [...allFields]; // start with all empty
+      const previouslyFilled = _savedFields.get(noteId) || [];
+      const previousLabels = new Set(previouslyFilled.filter(f => !f.wasRejected).map(f => f.fieldLabel));
+      const emptyFields = allFields.filter(f => !previousLabels.has(f));
 
       // 5. Analyze image
       const imageDescription = await analyzeImageForContext(openRouterKey, imgData.base64, imgData.mimeType);
@@ -200,6 +203,7 @@ export function useVoiceQuiz() {
         crossNodeContext,
         emptyFields,
         allFields,
+        filledFields: previouslyFilled,
       });
 
       // 6. Generate first question
@@ -396,28 +400,39 @@ export function useVoiceQuiz() {
         state.allFields,
       );
 
-      if (resolved.length > 0) {
-        // Merge with existing filled fields (avoid duplicates)
-        const existingIds = new Set(state.filledFields.map(f => f.fieldId));
-        const newFilled = [...state.filledFields];
-        const newEmpty = [...state.emptyFields];
+      const existingIds = new Set(state.filledFields.map(f => f.fieldId));
+      const newFilled = [...state.filledFields];
+      const newEmpty = [...state.emptyFields];
 
+      if (resolved.length > 0) {
         for (const f of resolved) {
           if (!existingIds.has(f.fieldId)) {
             newFilled.push(f);
             existingIds.add(f.fieldId);
           } else {
-            // Update existing
             const idx = newFilled.findIndex(x => x.fieldId === f.fieldId);
             if (idx >= 0) newFilled[idx] = f;
           }
-          // Remove from empty
           const emptyIdx = newEmpty.indexOf(f.fieldLabel);
           if (emptyIdx >= 0) newEmpty.splice(emptyIdx, 1);
         }
-
-        state._set({ filledFields: newFilled, emptyFields: newEmpty });
+      } else if (newEmpty.length > 0) {
+        // Extraction returned nothing — auto-advance past the current field
+        // to prevent the AI from asking the same question in a loop.
+        // Treat the director's response as an implicit fill for the first empty field.
+        const skippedLabel = newEmpty[0];
+        newEmpty.splice(0, 1);
+        newFilled.push({
+          fieldId: skippedLabel.toLowerCase().replace(/\s+/g, '-'),
+          fieldLabel: skippedLabel,
+          value: finalText,
+          sourceWords: finalText,
+          wasInferred: true,
+          wasRejected: false,
+        });
       }
+
+      state._set({ filledFields: newFilled, emptyFields: newEmpty });
 
       // Continue chain
       await generateAndAsk();
@@ -428,6 +443,11 @@ export function useVoiceQuiz() {
   }
 
   const closeQuiz = useCallback(() => {
+    // Save progress so green dots persist when reopened
+    const state = useVoiceQuizStore.getState();
+    if (state.noteId && state.filledFields.length > 0) {
+      _savedFields.set(state.noteId, [...state.filledFields]);
+    }
     stopAllMedia();
     useVoiceQuizStore.getState()._reset();
   }, []);
@@ -445,6 +465,11 @@ export function useVoiceQuiz() {
       await boardStore.updateCategoryNote(state.noteId, { text: noteText });
     } else if (state.noteType === 'edit' && state.noteId) {
       await boardStore.updateEditNote(state.noteId, { text: noteText });
+    }
+
+    // Save confirmed fields
+    if (state.noteId) {
+      _savedFields.set(state.noteId, [...confirmedFields]);
     }
 
     stopAllMedia();
