@@ -550,7 +550,7 @@ export function useVoiceQuiz() {
               const idx = newFilled.findIndex(x => x.fieldId === f.fieldId);
               if (idx >= 0) newFilled[idx] = f;
             }
-            const emptyIdx = newEmpty.indexOf(f.fieldLabel);
+            const emptyIdx = newEmpty.findIndex(e => e.toLowerCase() === f.fieldLabel.toLowerCase());
             if (emptyIdx >= 0) newEmpty.splice(emptyIdx, 1);
           }
 
@@ -575,7 +575,7 @@ export function useVoiceQuiz() {
             const idx = newFilled.findIndex(x => x.fieldId === f.fieldId);
             if (idx >= 0) newFilled[idx] = f;
           }
-          const emptyIdx = newEmpty.indexOf(f.fieldLabel);
+          const emptyIdx = newEmpty.findIndex(e => e.toLowerCase() === f.fieldLabel.toLowerCase());
           if (emptyIdx >= 0) newEmpty.splice(emptyIdx, 1);
         }
       } else if (newEmpty.length > 0) {
@@ -592,7 +592,12 @@ export function useVoiceQuiz() {
       }
 
       state._set({ filledFields: newFilled, emptyFields: newEmpty });
-      await generateAndAsk();
+      // Guard: if all fields resolved, go straight to confirming — no extra API round-trip
+      if (newEmpty.length === 0) {
+        useVoiceQuizStore.getState()._set({ status: 'confirming' });
+      } else {
+        await generateAndAsk();
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Processing failed';
       state._set({ status: 'error', errorMessage: msg });
@@ -691,12 +696,45 @@ export function useVoiceQuiz() {
 
   // ─── Confirm and write fields ───────────────────────────────────────────────
 
-  const closeQuiz = useCallback(() => {
+  // closeQuiz: end session at any point — write whatever has been captured so far to the node.
+  // Any field that was answered gets written; unanswered fields are left untouched.
+  const closeQuiz = useCallback(async () => {
     const state = useVoiceQuizStore.getState();
-    if (state.noteId && state.filledFields.length > 0) {
+    const boardStore = useBoardStore.getState();
+
+    const activeFields = state.filledFields.filter(f => !f.wasRejected);
+
+    if (state.noteId && activeFields.length > 0) {
+      // Persist to in-memory + reactive store
       _savedFields.set(state.noteId, [...state.filledFields]);
       useSavedFieldsStore.getState().save(state.noteId, [...state.filledFields]);
+
+      // Write partial results to the note so no work is lost
+      if (state.singleFieldMode) {
+        // Single-field re-record: merge with existing saved fields
+        const prevFields = _savedFields.get(state.noteId) || [];
+        const mergedFields = [
+          ...prevFields.filter(f => f.fieldId !== state.targetFieldId),
+          ...activeFields,
+        ];
+        const finalText = mergedFields.map(f => f.value).join('. ');
+        if (state.noteType === 'category') {
+          await boardStore.updateCategoryNote(state.noteId, { text: finalText });
+        } else if (state.noteType === 'edit') {
+          await boardStore.updateEditNote(state.noteId, { text: finalText });
+        }
+        _savedFields.set(state.noteId, mergedFields);
+        useSavedFieldsStore.getState().save(state.noteId, mergedFields);
+      } else {
+        const noteText = activeFields.map(f => f.value).join('. ');
+        if (state.noteType === 'category') {
+          await boardStore.updateCategoryNote(state.noteId, { text: noteText });
+        } else if (state.noteType === 'edit') {
+          await boardStore.updateEditNote(state.noteId, { text: noteText });
+        }
+      }
     }
+
     stopAllMedia();
     useVoiceQuizStore.getState()._reset();
   }, []);

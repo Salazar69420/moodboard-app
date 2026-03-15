@@ -908,7 +908,9 @@ export function CategoryNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
 
 export { MINIMIZED_HEIGHT as CATEGORY_NOTE_MINIMIZED_HEIGHT };
 
-// ─── Voice Field Row (Improvement 5) ─────────────────────────────────────────
+// ─── Voice Field Row ──────────────────────────────────────────────────────────
+// Per-field re-record. Mic button is faintly visible at rest (always discoverable)
+// and becomes full-strength on hover.
 
 function VoiceFieldRow({
     fieldLabel, fieldValue, wasInferred, categoryColor, onReRecord,
@@ -928,54 +930,62 @@ function VoiceFieldRow({
             style={{
                 display: 'flex', alignItems: 'flex-start',
                 justifyContent: 'space-between', gap: 6,
-                padding: '2px 0',
-                borderLeft: wasInferred ? `2px solid rgba(251,191,36,0.35)` : `2px solid ${categoryColor}30`,
-                paddingLeft: 6,
-                marginBottom: 3,
+                paddingLeft: 7, marginBottom: 4,
+                borderLeft: `2px solid ${wasInferred ? 'rgba(251,191,36,0.38)' : `${categoryColor}32`}`,
                 transition: 'border-color 0.2s ease',
             }}
         >
             <div style={{ minWidth: 0, flex: 1 }}>
-                <span style={{
-                    fontSize: 8.5,
+                <div style={{
+                    fontSize: 8,
                     fontFamily: "'JetBrains Mono', monospace",
-                    color: wasInferred ? 'rgba(251,191,36,0.5)' : `${categoryColor}60`,
-                    letterSpacing: '0.06em',
+                    color: wasInferred ? 'rgba(251,191,36,0.48)' : `${categoryColor}55`,
+                    letterSpacing: '0.07em',
                     textTransform: 'uppercase',
-                    marginRight: 5,
+                    marginBottom: 1,
+                    display: 'flex', alignItems: 'center', gap: 5,
                 }}>
                     {fieldLabel}
-                </span>
-                <span style={{
-                    fontSize: 10,
-                    color: 'rgba(255,255,255,0.5)',
+                    {wasInferred && (
+                        <span style={{ color: 'rgba(251,191,36,0.3)', letterSpacing: '0.05em', fontSize: 7 }}>
+                            · inferred
+                        </span>
+                    )}
+                </div>
+                <div style={{
+                    fontSize: 10.5,
+                    color: 'rgba(255,255,255,0.52)',
                     fontFamily: "'Inter', system-ui, sans-serif",
+                    lineHeight: 1.4,
                 }}>
                     {fieldValue}
-                </span>
+                </div>
             </div>
+
+            {/* Re-record mic — always slightly visible so the feature is discoverable */}
             <button
                 onClick={(e) => { e.stopPropagation(); onReRecord(); }}
-                title={`Re-record ${fieldLabel}`}
+                title={`Re-record "${fieldLabel}" with your voice`}
                 style={{
-                    opacity: hovered ? 1 : 0,
-                    transition: 'opacity 0.15s ease, color 0.15s ease',
-                    background: 'transparent',
-                    border: 'none',
-                    color: wasInferred ? 'rgba(251,191,36,0.6)' : `${categoryColor}60`,
+                    opacity: hovered ? 1 : 0.3,
+                    transition: 'opacity 0.18s ease, color 0.18s ease, background 0.18s ease, border-color 0.18s ease',
+                    background: hovered
+                        ? (wasInferred ? 'rgba(251,191,36,0.1)' : `${categoryColor}15`)
+                        : 'transparent',
+                    border: `1px solid ${hovered
+                        ? (wasInferred ? 'rgba(251,191,36,0.25)' : `${categoryColor}30`)
+                        : 'transparent'}`,
+                    borderRadius: 6,
+                    color: hovered
+                        ? (wasInferred ? 'rgba(251,191,36,0.9)' : categoryColor)
+                        : (wasInferred ? 'rgba(251,191,36,0.6)' : `${categoryColor}70`),
                     cursor: 'pointer',
-                    padding: '2px 3px',
+                    padding: '3px 4px',
                     display: 'flex', alignItems: 'center',
-                    flexShrink: 0,
-                }}
-                onMouseEnter={e => {
-                    (e.currentTarget as HTMLElement).style.color = wasInferred ? 'rgba(251,191,36,0.9)' : categoryColor;
-                }}
-                onMouseLeave={e => {
-                    (e.currentTarget as HTMLElement).style.color = wasInferred ? 'rgba(251,191,36,0.6)' : `${categoryColor}60`;
+                    flexShrink: 0, marginTop: 1,
                 }}
             >
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
                     <line x1="12" y1="19" x2="12" y2="23"/>
