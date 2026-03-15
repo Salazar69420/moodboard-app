@@ -67,7 +67,13 @@ export async function analyzeImageForContext(
       messages: [
         {
           role: 'system',
-          content: 'You are analyzing an image for a film director\'s shot planning tool. Describe what you see in precise visual terms: composition, subjects, lighting, environment, color, atmosphere. Be specific. Use filmmaker language. This description will be used to ask the director targeted questions about their vision for this shot. 3-5 sentences maximum.',
+          content: `You are a creative assistant analyzing a reference image for a film director's shot planner.
+Describe what you see in 3-4 concise sentences. Focus on what matters for recreating this shot:
+- Subject (who/what, position, expression, wardrobe)
+- Composition (framing, angle, depth)
+- Lighting (direction, quality, color)
+- Mood (atmosphere, palette, energy)
+Use specific visual language. This description helps ask the director smart questions about their vision.`,
         },
         {
           role: 'user',
@@ -106,23 +112,27 @@ export async function generateNextQuestion(
     .map(m => `${m.role === 'ai' ? 'AI' : 'DIRECTOR'}: ${m.text}`)
     .join('\n');
 
-  const systemPrompt = `You are a film director's interview assistant for "${params.nodeLabel}".
-Extract the director's vision — one short question at a time.
+  const systemPrompt = `You are a friendly, sharp creative collaborator helping a film director plan the "${params.nodeLabel}" aspect of their shot. You're like a trusted AD who keeps things moving and gets the director's intent on the first try.
 
-RULES:
-1. Ask ONE short question (1–2 sentences max). No preamble, no filler.
-2. Offer 2–3 concrete choices when helpful, but keep them brief.
-3. NEVER repeat a field you already asked about — read the conversation carefully.
-4. If the director already answered a field (even indirectly), mark it resolved and move on.
-5. When ALL empty fields are resolved → respond with exactly: COMPLETE
-6. Never assume or fill a field without a confirmed director answer.
-7. ${params.lastAnswerWasConfused ? 'The director didn\'t understand — rephrase in plain everyday language, no jargon.' : 'Be direct and conversational.'}
+YOUR STYLE:
+- Warm, quick, fun. Like a creative jam session, not an interrogation.
+- ONE question only. Keep it to 1 sentence. Be specific to what you see in the image.
+- Give 2-3 options pulled from the actual image when it helps — "the cold blue tones or something warmer?" not generic film school options.
+- Accept ANY answer — even one-word or vague answers. If they say "yeah that" or "keep it as is", that's a valid answer. Move on.
+- Reference the image directly: "I see the snow falling…", "With the character standing center frame…"
 
-IMAGE CONTEXT: ${params.imageDescription}
-OTHER NODES: ${params.crossNodeContext}
-FIELDS STILL EMPTY: ${params.emptyFields.join(', ')}
+ABSOLUTE RULES:
+- ${params.emptyFields.length === 0 ? 'ALL fields are filled. Respond with exactly: COMPLETE' : `Ask about the NEXT empty field: "${params.emptyFields[0]}". Do NOT ask about any other field.`}
+- NEVER ask about a field that isn't in the EMPTY list below.
+- NEVER repeat or rephrase a question you already asked.
+- When no empty fields remain → respond with exactly: COMPLETE
+- ${params.lastAnswerWasConfused ? 'Last answer was confused — rephrase super simply, no film jargon at all.' : ''}
 
-${conversationFormatted ? `CONVERSATION:\n${conversationFormatted}` : 'Start with the most visually obvious field.'}`;
+IMAGE: ${params.imageDescription}
+${params.crossNodeContext !== 'No other nodes filled yet.' ? `ALREADY DECIDED:\n${params.crossNodeContext}` : ''}
+EMPTY FIELDS: ${params.emptyFields.join(', ') || 'NONE — say COMPLETE'}
+
+${conversationFormatted ? `CONVERSATION:\n${conversationFormatted}` : ''}`;
 
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -175,15 +185,24 @@ export async function extractResolvedFields(
       messages: [
         {
           role: 'system',
-          content: `Given this conversation between an AI interviewer and a film director, extract any clearly resolved field values.
+          content: `Extract field values from this director interview. Be AGGRESSIVE — if the director gave any kind of answer (even vague, one-word, or "keep it as is"), extract it.
 
-ALL POSSIBLE FIELDS: ${allFields.join(', ')}
+FIELDS: ${allFields.join(', ')}
 STILL EMPTY: ${emptyFields.join(', ')}
 
-For each resolved field, return JSON array:
-[{ "fieldId": "...", "fieldLabel": "...", "value": "concise cinematic language", "sourceWords": "director's exact words", "wasInferred": false }]
+EXTRACTION RULES:
+- "yeah that", "keep it", "as is", "like the reference" → extract using what the AI described in its question as the value
+- "I want X" → extract X directly
+- One-word answers ("centered", "static", "warm") → that's the value
+- Indirect answers ("it's anime", "like a Wes Anderson film") → extract as-is, set wasInferred: true
+- ALWAYS try to extract something. Only return [] if the director literally said nothing useful.
 
-Only include fields the director clearly addressed. wasInferred=true if you had to read between the lines. Return ONLY valid JSON array. If nothing resolved yet, return [].`,
+Return JSON array only:
+[{ "fieldId": "field-name-kebab", "fieldLabel": "Field Name", "value": "short cinematic description for shot notes", "sourceWords": "director's words", "wasInferred": false }]
+
+"value" should be polished for shot notes — concise, specific, professional.
+"sourceWords" should be the director's actual words.
+Return ONLY valid JSON. No markdown, no explanation.`,
         },
         { role: 'user', content: conversationFormatted },
       ],
