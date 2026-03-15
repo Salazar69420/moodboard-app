@@ -400,6 +400,59 @@ export async function transcribeAudio(
   return data.text || '';
 }
 
+export async function generateClarificationOptions(
+  openRouterKey: string,
+  params: {
+    nodeLabel: string;
+    fieldLabel: string;
+    directorWords: string;
+    imageDescription: string;
+  },
+): Promise<string[]> {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${openRouterKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': window.location.origin,
+      'X-Title': 'Moodboard App',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.0-flash-lite-001',
+      messages: [
+        {
+          role: 'system',
+          content: `You are helping a film director clarify their intent for the "${params.nodeLabel}" aspect of a shot.
+The director was asked about "${params.fieldLabel}" and said: "${params.directorWords}"
+Their answer was too vague to extract a clear value.
+IMAGE CONTEXT: ${params.imageDescription}
+
+Generate exactly 4 short, concrete, specific options for "${params.fieldLabel}" that would fit this shot.
+Each option should be 2-6 words, professional shot-note language.
+Return ONLY a JSON array of 4 strings. No markdown, no explanation.
+Example: ["Static lock-off", "Slow push-in", "Tracking with subject", "Handheld follow"]`,
+        },
+        { role: 'user', content: 'Generate 4 options.' },
+      ],
+      temperature: 0.6,
+      max_tokens: 120,
+    }),
+  });
+
+  if (!response.ok) return [];
+
+  const data = await response.json();
+  let content = data.choices?.[0]?.message?.content?.trim() || '[]';
+  content = content.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '');
+
+  try {
+    const parsed = JSON.parse(content);
+    return Array.isArray(parsed) ? parsed.slice(0, 4) : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function speakText(
   openAiKey: string,
   text: string,

@@ -15,6 +15,7 @@ const STATUS: Record<string, { color: string; label: string; glow: string }> = {
   thinking:   { color: 'rgba(148,163,184,0.9)', label: 'Thinking',   glow: 'rgba(148,163,184,0.15)' },
   listening:  { color: 'rgba(251,191,36,0.95)', label: 'Listening',  glow: 'rgba(251,191,36,0.2)'  },
   processing: { color: 'rgba(148,163,184,0.9)', label: 'Processing', glow: 'rgba(148,163,184,0.15)' },
+  clarifying: { color: 'rgba(251,191,36,0.95)', label: 'Clarify',    glow: 'rgba(251,191,36,0.2)'  },
   confirming: { color: 'rgba(74,222,128,0.95)', label: 'Review',     glow: 'rgba(74,222,128,0.2)'  },
   error:      { color: 'rgba(248,113,113,0.95)', label: 'Error',     glow: 'rgba(248,113,113,0.2)'  },
 };
@@ -514,6 +515,16 @@ function Overlay({ quiz }: { quiz: ReturnType<typeof useVoiceQuiz> }) {
                   </div>
                 )}
 
+                {/* Clarification popup */}
+                {quiz.pendingClarification && (
+                  <ClarificationPopup
+                    fieldLabel={quiz.pendingClarification.fieldLabel}
+                    options={quiz.pendingClarification.options}
+                    onSelect={quiz.selectClarification}
+                    onSkip={quiz.skipClarification}
+                  />
+                )}
+
                 <div ref={messagesEndRef} />
               </div>
             )}
@@ -657,8 +668,115 @@ function Overlay({ quiz }: { quiz: ReturnType<typeof useVoiceQuiz> }) {
           from { opacity: 0.2; }
           to   { opacity: 0.7; }
         }
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
       `}</style>
     </>
+  );
+}
+
+// ─── Clarification Popup ──────────────────────────────────────────────────────
+
+function ClarificationPopup({
+  fieldLabel, options, onSelect, onSkip,
+}: {
+  fieldLabel: string;
+  options: string[];
+  onSelect: (option: string) => void;
+  onSkip: () => void;
+}) {
+  return (
+    <div style={{
+      marginTop: 8,
+      padding: '14px 16px 12px',
+      borderRadius: 16,
+      background: 'rgba(251,191,36,0.05)',
+      border: '1px solid rgba(251,191,36,0.18)',
+      backdropFilter: 'blur(16px)',
+    }}>
+      <div style={{
+        fontSize: 10, fontWeight: 700,
+        fontFamily: '-apple-system, "SF Mono", monospace',
+        color: 'rgba(251,191,36,0.55)',
+        textTransform: 'uppercase', letterSpacing: '0.12em',
+        marginBottom: 10,
+      }}>
+        Pick the closest match for {fieldLabel}
+      </div>
+
+      {/* 2×2 grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        {options.slice(0, 4).map((opt, i) => (
+          <button
+            key={opt}
+            onClick={() => onSelect(opt)}
+            style={{
+              position: 'relative',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(251,191,36,0.15)',
+              borderRadius: 12,
+              padding: '10px 12px 10px 34px',
+              textAlign: 'left',
+              cursor: 'pointer',
+              color: 'rgba(255,255,255,0.8)',
+              fontSize: 12,
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", sans-serif',
+              lineHeight: 1.4,
+              backdropFilter: 'blur(10px)',
+              transition: 'all 0.15s ease',
+              animation: `slideIn 0.22s ease ${i * 0.06}s both`,
+            }}
+            onMouseEnter={e => {
+              const el = e.currentTarget as HTMLElement;
+              el.style.background = 'rgba(251,191,36,0.1)';
+              el.style.borderColor = 'rgba(251,191,36,0.4)';
+              el.style.boxShadow = '0 0 12px rgba(251,191,36,0.12)';
+            }}
+            onMouseLeave={e => {
+              const el = e.currentTarget as HTMLElement;
+              el.style.background = 'rgba(255,255,255,0.04)';
+              el.style.borderColor = 'rgba(251,191,36,0.15)';
+              el.style.boxShadow = 'none';
+            }}
+          >
+            <span style={{
+              position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)',
+              fontSize: 9, fontWeight: 700,
+              fontFamily: '-apple-system, "SF Mono", monospace',
+              color: 'rgba(251,191,36,0.4)',
+              letterSpacing: '0.05em',
+            }}>
+              {String(i + 1).padStart(2, '0')}
+            </span>
+            {opt}
+          </button>
+        ))}
+      </div>
+
+      <button
+        onClick={onSkip}
+        style={{
+          marginTop: 10,
+          display: 'block',
+          width: '100%',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          fontSize: 11,
+          color: 'rgba(255,255,255,0.25)',
+          fontFamily: '-apple-system, "Inter", sans-serif',
+          textAlign: 'center',
+          padding: '2px 0',
+          transition: 'color 0.15s ease',
+        }}
+        onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)'}
+        onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.25)'}
+      >
+        Skip this field
+      </button>
+    </div>
   );
 }
 

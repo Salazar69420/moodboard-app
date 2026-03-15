@@ -8,6 +8,7 @@ import { SHOT_CATEGORIES, EDIT_CATEGORIES } from '../types';
 import {
   analyzeImageForContext,
   generateNextQuestion,
+  generateClarificationOptions,
   extractResolvedFields,
   transcribeAudio,
   getCategoryFields,
@@ -25,6 +26,7 @@ export type QuizStatus =
   | 'speaking'
   | 'listening'
   | 'processing'
+  | 'clarifying'
   | 'confirming'
   | 'error';
 
@@ -45,6 +47,12 @@ interface VoiceQuizState {
   currentAudioUrl: string | null;
   errorMessage: string | null;
   lastQuestionWasConfused: boolean;
+  pendingClarification: {
+    fieldLabel: string;
+    fieldId: string;
+    options: string[];
+    directorWords: string;
+  } | null;
 }
 
 interface VoiceQuizStore extends VoiceQuizState {
@@ -69,6 +77,7 @@ const initialState: VoiceQuizState = {
   currentAudioUrl: null,
   errorMessage: null,
   lastQuestionWasConfused: false,
+  pendingClarification: null,
 };
 
 export const useVoiceQuizStore = create<VoiceQuizStore>((set) => ({
@@ -252,6 +261,7 @@ export function useVoiceQuiz() {
         imageDescription: state.imageDescription,
         crossNodeContext: state.crossNodeContext,
         emptyFields: state.emptyFields,
+        addressedFields: state.allFields.filter(f => !state.emptyFields.includes(f)),
         messages: state.messages,
         lastAnswerWasConfused: state.lastQuestionWasConfused,
       });
@@ -447,6 +457,24 @@ export function useVoiceQuiz() {
         if (emptyIdx >= 0) newEmpty.splice(emptyIdx, 1);
       }
 
+      // If nothing resolved and director gave a substantive answer → offer clarification
+      if (resolved.length === 0 && finalText.trim().split(/\s+/).length >= 3 && askedField) {
+        const opts = await generateClarificationOptions(openRouterKey, {
+          nodeLabel: getCategoryLabel(state.categoryId || ''),
+          fieldLabel: askedField,
+          directorWords: finalText,
+          imageDescription: state.imageDescription,
+        });
+        if (opts.length > 0) {
+          const fieldId = askedField.toLowerCase().replace(/[\s/]+/g, '-').replace(/[^a-z0-9-]/g, '');
+          state._set({
+            status: 'clarifying',
+            pendingClarification: { fieldLabel: askedField, fieldId, options: opts, directorWords: finalText },
+          });
+          return;
+        }
+      }
+
       // Always advance past the asked field — if extraction didn't cover it,
       // the director moved on and we skip it (no inferring, no re-asking).
       if (askedField && newEmpty[0] === askedField) {
@@ -462,6 +490,39 @@ export function useVoiceQuiz() {
       state._set({ status: 'error', errorMessage: msg });
     }
   }
+
+  const selectClarification = useCallback(async (option: string) => {
+    const state = useVoiceQuizStore.getState();
+    const pending = state.pendingClarification;
+    if (!pending) return;
+
+    const filledEntry: FilledField = {
+      fieldId: pending.fieldId,
+      fieldLabel: pending.fieldLabel,
+      value: option,
+      sourceWords: pending.directorWords,
+      wasInferred: false,
+    };
+    const existingIdx = state.filledFields.findIndex(f => f.fieldId === pending.fieldId);
+    const newFilled = [...state.filledFields];
+    if (existingIdx >= 0) {
+      newFilled[existingIdx] = filledEntry;
+    } else {
+      newFilled.push(filledEntry);
+    }
+    const newEmpty = state.emptyFields.filter(f => f !== pending.fieldLabel);
+    state._set({ filledFields: newFilled, emptyFields: newEmpty, pendingClarification: null });
+    await generateAndAsk();
+  }, []);
+
+  const skipClarification = useCallback(async () => {
+    const state = useVoiceQuizStore.getState();
+    const pending = state.pendingClarification;
+    if (!pending) return;
+    const newEmpty = state.emptyFields.filter(f => f !== pending.fieldLabel);
+    state._set({ emptyFields: newEmpty, pendingClarification: null });
+    await generateAndAsk();
+  }, []);
 
   const closeQuiz = useCallback(() => {
     // Save progress so green dots persist when reopened
@@ -511,7 +572,7 @@ export function useVoiceQuiz() {
       } catch { /* fall through */ }
     }
 
-    if (state.filledFields.filter(f => !f.wasRejected).length > 0) {
+    if (hasConversation || state.filledFields.filter(f => !f.wasRejected).length > 0) {
       state._set({ status: 'confirming' });
       return;
     }
@@ -579,5 +640,7 @@ export function useVoiceQuiz() {
     retryQuestion,
     manualStopListening,
     startListening,
+    selectClarification,
+    skipClarification,
   };
 }
