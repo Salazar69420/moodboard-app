@@ -5,6 +5,11 @@ import { useImageStore } from '../../stores/useImageStore';
 import { useBlobUrl } from '../../hooks/useBlobUrl';
 import type { FilledField } from '../../utils/voice-quiz';
 
+// Strip markdown bold markers from AI text
+function stripMd(text: string): string {
+  return text.replace(/\*\*(.*?)\*\*/g, '$1').replace(/__(.*?)__/g, '$1');
+}
+
 const STATUS: Record<string, { color: string; label: string; glow: string }> = {
   analyzing:  { color: 'rgba(148,163,184,0.9)', label: 'Analyzing',  glow: 'rgba(148,163,184,0.15)' },
   thinking:   { color: 'rgba(148,163,184,0.9)', label: 'Thinking',   glow: 'rgba(148,163,184,0.15)' },
@@ -71,9 +76,9 @@ function Overlay({ quiz }: { quiz: ReturnType<typeof useVoiceQuiz> }) {
           position: 'fixed',
           bottom: 0, left: '50%',
           transform: 'translateX(-50%)',
-          width: 700,
+          width: 740,
           maxWidth: '96vw',
-          maxHeight: '82vh',
+          maxHeight: '84vh',
           zIndex: 9999,
           display: 'flex',
           flexDirection: 'column',
@@ -194,19 +199,19 @@ function Overlay({ quiz }: { quiz: ReturnType<typeof useVoiceQuiz> }) {
           {/* Image column */}
           {imgUrl && (
             <div style={{
-              width: 180, flexShrink: 0,
+              width: 220, flexShrink: 0,
               borderRight: '1px solid rgba(255,255,255,0.05)',
               display: 'flex', flexDirection: 'column',
               overflow: 'hidden',
             }}>
               {/* Image */}
-              <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0 }}>
+              <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0, background: '#060608' }}>
                 <img
                   src={imgUrl}
                   alt="Reference"
                   style={{
                     width: '100%', height: '100%',
-                    objectFit: 'cover', display: 'block',
+                    objectFit: 'contain', display: 'block',
                     transition: 'transform 0.4s ease',
                   }}
                 />
@@ -428,7 +433,7 @@ function Overlay({ quiz }: { quiz: ReturnType<typeof useVoiceQuiz> }) {
                       color: msg.role === 'ai' ? 'rgba(186,215,242,0.88)' : 'rgba(253,230,138,0.88)',
                       lineHeight: 1.55,
                     }}>
-                      {msg.text}
+                      {msg.role === 'ai' ? stripMd(msg.text) : msg.text}
                     </div>
                   </div>
                 ))}

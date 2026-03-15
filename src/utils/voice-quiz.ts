@@ -106,27 +106,23 @@ export async function generateNextQuestion(
     .map(m => `${m.role === 'ai' ? 'AI' : 'DIRECTOR'}: ${m.text}`)
     .join('\n');
 
-  const systemPrompt = `You are a film director's interview assistant for the ${params.nodeLabel} aspect of a shot.
-Your only job is to extract the director's vision by asking one question at a time.
+  const systemPrompt = `You are a film director's interview assistant for "${params.nodeLabel}".
+Extract the director's vision — one short question at a time.
 
-CRITICAL RULES:
-1. EXTRACTOR ONLY — never suggest ideas the director didn't express
-2. ONE question per response, nothing else
-3. Every question must reference something visible in the image OR something the director already said
-4. Use contrast format: offer two or three specific directorial choices
-5. When a field is clearly resolved, move to the next empty one
-6. When ALL fields are resolved, respond with exactly: COMPLETE
-7. ${params.lastAnswerWasConfused ? 'The director said they didn\'t understand your previous question. Rephrase it in plain everyday language — no cinematic terminology.' : 'Use professional but accessible language.'}
-8. Never fill a field by assuming — only from confirmed director answers
+RULES:
+1. Ask ONE short question (1–2 sentences max). No preamble, no filler.
+2. Offer 2–3 concrete choices when helpful, but keep them brief.
+3. NEVER repeat a field you already asked about — read the conversation carefully.
+4. If the director already answered a field (even indirectly), mark it resolved and move on.
+5. When ALL empty fields are resolved → respond with exactly: COMPLETE
+6. Never assume or fill a field without a confirmed director answer.
+7. ${params.lastAnswerWasConfused ? 'The director didn\'t understand — rephrase in plain everyday language, no jargon.' : 'Be direct and conversational.'}
 
-IMAGE: ${params.imageDescription}
+IMAGE CONTEXT: ${params.imageDescription}
+OTHER NODES: ${params.crossNodeContext}
+FIELDS STILL EMPTY: ${params.emptyFields.join(', ')}
 
-CROSS-NODE CONTEXT (already filled on this board):
-${params.crossNodeContext}
-
-EMPTY FIELDS REMAINING: ${params.emptyFields.join(', ')}
-
-${conversationFormatted ? `CONVERSATION SO FAR:\n${conversationFormatted}` : 'This is the first question. Start with the most visually obvious field.'}`;
+${conversationFormatted ? `CONVERSATION:\n${conversationFormatted}` : 'Start with the most visually obvious field.'}`;
 
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
