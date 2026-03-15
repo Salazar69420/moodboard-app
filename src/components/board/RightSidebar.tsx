@@ -1,4 +1,6 @@
 import { useState, useCallback } from 'react';
+
+const IS_TOUCH = typeof window !== 'undefined' && navigator.maxTouchPoints > 0;
 import { useUIStore } from '../../stores/useUIStore';
 import { useBoardStore } from '../../stores/useBoardStore';
 import { useImageStore } from '../../stores/useImageStore';
@@ -443,8 +445,8 @@ export function RightSidebar() {
                       style={{
                         background: 'rgba(249,115,22,0.06)',
                         border: '1px solid rgba(249,115,22,0.14)',
-                        borderRadius: 4, padding: '2px 6px',
-                        fontSize: 9, color: '#f97316',
+                        borderRadius: 4, padding: IS_TOUCH ? '8px 10px' : '2px 6px',
+                        fontSize: IS_TOUCH ? 13 : 9, color: '#f97316',
                         cursor: isAiLoading ? 'wait' : 'pointer',
                         fontFamily: "'JetBrains Mono', monospace", fontWeight: 600,
                         transition: 'all 0.1s ease', flexShrink: 0,
@@ -472,7 +474,7 @@ export function RightSidebar() {
                         minHeight: cat.id === 'time' ? 28 : 44,
                         background: 'transparent', border: 'none',
                         color: isFilled ? '#d0d2e2' : '#444',
-                        fontSize: 12, fontFamily: "'Inter', sans-serif",
+                        fontSize: IS_TOUCH ? 16 : 12, fontFamily: "'Inter', sans-serif",
                         resize: 'vertical' as const, outline: 'none',
                         lineHeight: 1.55, boxSizing: 'border-box' as const,
                         transition: 'color 0.15s ease',

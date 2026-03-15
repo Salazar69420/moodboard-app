@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { BoardImage } from '../../types';
+
+const IS_TOUCH = typeof window !== 'undefined' && navigator.maxTouchPoints > 0;
 import { useBoardStore } from '../../stores/useBoardStore';
 import { useUIStore } from '../../stores/useUIStore';
 import { useProjectStore } from '../../stores/useProjectStore';
@@ -190,7 +192,7 @@ export function FloatingToolbar({ image, displayW, displayH }: FloatingToolbarPr
                                     flexDirection: 'column',
                                     alignItems: 'center',
                                     gap: 3,
-                                    padding: '7px 4px 6px',
+                                    padding: IS_TOUCH ? '12px 6px 10px' : '7px 4px 6px',
                                     borderRadius: 9,
                                     border: has
                                         ? `1px solid ${cat.color}40`
@@ -201,14 +203,14 @@ export function FloatingToolbar({ image, displayW, displayH }: FloatingToolbarPr
                                     position: 'relative',
                                     fontFamily: "'Inter', system-ui, sans-serif",
                                 }}
-                                onMouseEnter={(e) => {
-                                    if (!has) {
+                                onPointerEnter={(e) => {
+                                    if (!has && e.pointerType !== 'touch') {
                                         (e.currentTarget as HTMLElement).style.background = `${cat.color}18`;
                                         (e.currentTarget as HTMLElement).style.border = `1px solid ${cat.color}50`;
                                     }
                                 }}
-                                onMouseLeave={(e) => {
-                                    if (!has) {
+                                onPointerLeave={(e) => {
+                                    if (!has && e.pointerType !== 'touch') {
                                         (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)';
                                         (e.currentTarget as HTMLElement).style.border = '1px solid transparent';
                                     }
@@ -268,8 +270,9 @@ function ToolbarBtn({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 5,
-                padding: '5px 10px',
+                padding: IS_TOUCH ? '10px 14px' : '5px 10px',
                 borderRadius: 7,
+                touchAction: 'manipulation',
                 fontSize: 11,
                 fontFamily: "'Inter', system-ui, sans-serif",
                 fontWeight: 500,
@@ -280,14 +283,14 @@ function ToolbarBtn({
                 transition: 'all 0.12s ease',
                 whiteSpace: 'nowrap',
             }}
-            onMouseEnter={(e) => {
-                if (!disabled && !active) {
+            onPointerEnter={(e) => {
+                if (!disabled && !active && e.pointerType !== 'touch') {
                     (e.currentTarget as HTMLElement).style.background = 'rgba(249,115,22,0.1)';
                     (e.currentTarget as HTMLElement).style.color = '#f97316';
                 }
             }}
-            onMouseLeave={(e) => {
-                if (!disabled && !active) {
+            onPointerLeave={(e) => {
+                if (!disabled && !active && e.pointerType !== 'touch') {
                     (e.currentTarget as HTMLElement).style.background = 'transparent';
                     (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.65)';
                 }
