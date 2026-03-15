@@ -190,6 +190,7 @@ export interface FilledField {
   sourceWords: string;
   wasInferred: boolean;
   wasRejected?: boolean;
+  isConfirmedByDirector?: boolean; // for inferred fields — must be true before writing
 }
 
 // ─── API Functions ───────────────────────────────────────────────────────────
@@ -251,11 +252,18 @@ export async function generateNextQuestion(
     emptyFields: string[];
     messages: QuizMessage[];
     lastAnswerWasConfused: boolean;
+    clarifyFieldLabel?: string; // if set, AI asks clarification for this specific field
   },
 ): Promise<string> {
   const conversationFormatted = params.messages
     .map(m => `${m.role === 'ai' ? 'AI' : 'DIRECTOR'}: ${m.text}`)
     .join('\n');
+
+  const clarifyInstruction = params.clarifyFieldLabel
+    ? `CLARIFY MODE: The director gave a vague or indirect answer about "${params.clarifyFieldLabel}". Do NOT accept it — ask a targeted follow-up. Give 2-3 very specific, concrete options that are visible in the image. Get a clear, direct answer this time.`
+    : params.emptyFields.length === 0
+      ? 'ALL fields are filled. Respond with exactly: COMPLETE'
+      : `Ask about the NEXT empty field: "${params.emptyFields[0]}". Do NOT ask about any other field.`;
 
   const systemPrompt = `You are a friendly, sharp creative collaborator helping a film director plan the "${params.nodeLabel}" aspect of their shot. You're like a trusted AD who keeps things moving and gets the director's intent on the first try.
 
@@ -267,7 +275,7 @@ YOUR STYLE:
 - Reference the image directly: "I see the snow falling…", "With the character standing center frame…"
 
 ABSOLUTE RULES:
-- ${params.emptyFields.length === 0 ? 'ALL fields are filled. Respond with exactly: COMPLETE' : `Ask about the NEXT empty field: "${params.emptyFields[0]}". Do NOT ask about any other field.`}
+- ${clarifyInstruction}
 - NEVER ask about a field that isn't in the EMPTY list below.
 - NEVER repeat or rephrase a question you already asked.
 - When no empty fields remain → respond with exactly: COMPLETE

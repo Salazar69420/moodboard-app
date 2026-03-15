@@ -20,11 +20,15 @@ import {
 
 export type QuizStatus =
   | 'idle'
+  | 'scoping'
+  | 'mode-select'
   | 'analyzing'
   | 'thinking'
   | 'speaking'
   | 'listening'
   | 'processing'
+  | 'monologue-recording'
+  | 'monologue-processing'
   | 'confirming'
   | 'error';
 
@@ -45,6 +49,16 @@ interface VoiceQuizState {
   currentAudioUrl: string | null;
   errorMessage: string | null;
   lastQuestionWasConfused: boolean;
+  // Improvement 1 — Clarify mode
+  clarifyMode: boolean;
+  // Improvement 2 — Field ownership
+  fieldOwnership: Record<string, 'decide' | 'ai' | 'skip'>;
+  // Improvement 3 — Input mode
+  inputMode: 'guided' | 'monologue';
+  monologueTranscript: string;
+  // Improvement 5 — Single field mode
+  singleFieldMode: boolean;
+  targetFieldId: string | null;
 }
 
 interface VoiceQuizStore extends VoiceQuizState {
@@ -69,12 +83,32 @@ const initialState: VoiceQuizState = {
   currentAudioUrl: null,
   errorMessage: null,
   lastQuestionWasConfused: false,
+  clarifyMode: false,
+  fieldOwnership: {},
+  inputMode: 'guided',
+  monologueTranscript: '',
+  singleFieldMode: false,
+  targetFieldId: null,
 };
 
 export const useVoiceQuizStore = create<VoiceQuizStore>((set) => ({
   ...initialState,
   _set: (partial) => set(partial),
-  _reset: () => set(initialState),
+  _reset: () => set({ ...initialState }),
+}));
+
+// ─── Saved fields store (persists across quiz sessions, reactive) ─────────────
+
+interface SavedFieldsStore {
+  record: Record<string, FilledField[]>;
+  save: (noteId: string, fields: FilledField[]) => void;
+}
+
+export const useSavedFieldsStore = create<SavedFieldsStore>((set) => ({
+  record: {},
+  save: (noteId, fields) => set(state => ({
+    record: { ...state.record, [noteId]: fields },
+  })),
 }));
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
@@ -86,10 +120,9 @@ const _recorderRef    = { current: null as MediaRecorder | null };
 const _audioRef       = { current: null as HTMLAudioElement | null };
 const _streamRef      = { current: null as MediaStream | null };
 
-// Persist filled fields per noteId across sessions (survives End Session / reopen)
+// Persist filled fields per noteId across sessions
 const _savedFields = new Map<string, FilledField[]>();
-// Cross-node memory: maps noteId → { imageId, categoryId, categoryLabel } so we can
-// look up voice sessions from sibling nodes sharing the same reference image.
+// Cross-node memory
 const _sessionMeta = new Map<string, { imageId: string; categoryId: string; categoryLabel: string }>();
 const _pauseTimerRef  = { current: null as ReturnType<typeof setTimeout> | null };
 const _chunksRef      = { current: [] as BlobPart[] };
@@ -103,11 +136,8 @@ export function useVoiceQuiz() {
   const pauseTimerRef  = _pauseTimerRef;
   const chunksRef      = _chunksRef;
 
-  // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      stopAllMedia();
-    };
+    return () => { stopAllMedia(); };
   }, []);
 
   function stopAllMedia() {
@@ -141,7 +171,6 @@ export function useVoiceQuiz() {
     const allCats = [...SHOT_CATEGORIES, ...EDIT_CATEGORIES];
     const parts: string[] = [];
 
-    // 1. Written note text from sibling nodes
     const allNotes = noteType === 'category'
       ? boardState.categoryNotes.filter(n => n.imageId === imageId && n.id !== noteId && n.text.trim())
       : boardState.editNotes.filter(n => n.imageId === imageId && n.id !== noteId && n.text.trim());
@@ -151,10 +180,8 @@ export function useVoiceQuiz() {
       parts.push(`${cat?.label || n.categoryId}: ${n.text.trim()}`);
     }
 
-    // 2. Voice session memory from sibling nodes (even if not yet written to note text)
     for (const [siblingId, meta] of _sessionMeta.entries()) {
       if (siblingId === noteId || meta.imageId !== imageId) continue;
-      // Skip if we already have written text for this node above
       if (allNotes.some(n => n.id === siblingId)) continue;
       const fields = _savedFields.get(siblingId);
       if (!fields || fields.length === 0) continue;
@@ -166,6 +193,8 @@ export function useVoiceQuiz() {
 
     return parts.length > 0 ? parts.join('\n') : 'No other nodes filled yet.';
   }
+
+  // ─── Open quiz — goes to scoping screen ────────────────────────────────────
 
   const openQuiz = useCallback(async (noteId: string, noteType: 'category' | 'edit') => {
     const { _set } = useVoiceQuizStore.getState();
@@ -182,40 +211,29 @@ export function useVoiceQuiz() {
       return;
     }
 
-    _set({ isOpen: true, noteId, noteType, status: 'analyzing', errorMessage: null, messages: [], filledFields: [], liveTranscript: '' });
+    _set({ isOpen: true, status: 'analyzing', errorMessage: null, messages: [], filledFields: [], liveTranscript: '' });
 
     try {
-      // 1. Get the note
       const note = noteType === 'category'
         ? boardState.categoryNotes.find(n => n.id === noteId)
         : boardState.editNotes.find(n => n.id === noteId);
-
       if (!note) throw new Error('Note not found');
 
       const categoryId = note.categoryId;
       const imageId = note.imageId;
 
-      // 2. Get connected image
-      const images = useImageStore.getState().images;
-      const image = images.find(img => img.id === imageId);
-      if (!image) throw new Error('Connected image not found');
-
-      const imgData = await imageToBase64(image.blobId);
-      if (!imgData) throw new Error('Could not load image data');
-
-      // 3. Cross-node context
       const crossNodeContext = buildCrossNodeContext(noteId, noteType, imageId);
-
-      // 4. Get fields for this category, restoring any previously filled fields
       const allFields = getCategoryFields(categoryId);
       const previouslyFilled = _savedFields.get(noteId) || [];
       const previousLabels = new Set(previouslyFilled.filter(f => !f.wasRejected).map(f => f.fieldLabel));
       const emptyFields = allFields.filter(f => !previousLabels.has(f));
 
-      // 5. Analyze image
-      const imageDescription = await analyzeImageForContext(openRouterKey, imgData.base64, imgData.mimeType);
+      // Initialize ownership: already-filled fields default to 'skip', unfilled to 'decide'
+      const fieldOwnership: Record<string, 'decide' | 'ai' | 'skip'> = {};
+      allFields.forEach(f => {
+        fieldOwnership[f] = previousLabels.has(f) ? 'skip' : 'decide';
+      });
 
-      // Save session metadata for cross-node memory
       _sessionMeta.set(noteId, {
         imageId,
         categoryId,
@@ -223,24 +241,122 @@ export function useVoiceQuiz() {
       });
 
       _set({
-        categoryId,
-        imageId,
-        imageDescription,
-        crossNodeContext,
-        emptyFields,
-        allFields,
+        noteId, noteType, categoryId, imageId,
+        crossNodeContext, allFields, emptyFields, fieldOwnership,
         filledFields: previouslyFilled,
+        singleFieldMode: false, targetFieldId: null,
+        status: 'scoping',
       });
-
-      // 6. Generate first question
-      await generateAndAsk();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       _set({ status: 'error', errorMessage: msg });
     }
   }, []);
 
-  async function generateAndAsk() {
+  // ─── Start from ownership — called after scoping screen ────────────────────
+
+  const startFromOwnership = useCallback(() => {
+    const { fieldOwnership, allFields } = useVoiceQuizStore.getState();
+    const decideFields = allFields.filter(f => (fieldOwnership[f] ?? 'decide') === 'decide');
+    useVoiceQuizStore.getState()._set({
+      emptyFields: decideFields,
+      status: 'mode-select',
+    });
+  }, []);
+
+  // ─── Select input mode — called after mode-select screen ───────────────────
+
+  const selectMode = useCallback(async (mode: 'guided' | 'monologue') => {
+    const state = useVoiceQuizStore.getState();
+    const openRouterKey = useSettingsStore.getState().apiKey;
+
+    state._set({ inputMode: mode, status: 'analyzing' });
+
+    try {
+      const images = useImageStore.getState().images;
+      const image = images.find(img => img.id === state.imageId);
+      if (!image) throw new Error('Image not found');
+
+      const imgData = await imageToBase64(image.blobId);
+      if (!imgData) throw new Error('Image load failed');
+
+      const imageDescription = await analyzeImageForContext(openRouterKey, imgData.base64, imgData.mimeType);
+      state._set({ imageDescription });
+
+      if (mode === 'guided') {
+        await generateAndAsk();
+      } else {
+        state._set({ status: 'monologue-recording', monologueTranscript: '' });
+        startMonologueRecording();
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed';
+      state._set({ status: 'error', errorMessage: msg });
+    }
+  }, []);
+
+  // ─── Open single-field re-record session ───────────────────────────────────
+
+  const openSingleFieldQuiz = useCallback(async (
+    noteId: string,
+    noteType: 'category' | 'edit',
+    fieldId: string,
+    fieldLabel: string,
+  ) => {
+    const { _set } = useVoiceQuizStore.getState();
+    const boardState = useBoardStore.getState();
+    const openRouterKey = useSettingsStore.getState().apiKey;
+    const openAiKey = useSettingsStore.getState().openAiApiKey;
+
+    if (!openRouterKey || !openAiKey) {
+      _set({ isOpen: true, status: 'error', errorMessage: 'API keys not set. Open Settings.' });
+      return;
+    }
+
+    const note = noteType === 'category'
+      ? boardState.categoryNotes.find(n => n.id === noteId)
+      : boardState.editNotes.find(n => n.id === noteId);
+    if (!note) return;
+
+    _set({
+      isOpen: true, noteId, noteType,
+      categoryId: note.categoryId, imageId: note.imageId,
+      status: 'analyzing', errorMessage: null, messages: [],
+      filledFields: [], liveTranscript: '',
+      singleFieldMode: true, targetFieldId: fieldId,
+      emptyFields: [fieldLabel], allFields: [fieldLabel],
+      fieldOwnership: { [fieldLabel]: 'decide' },
+      inputMode: 'guided',
+    });
+
+    try {
+      const images = useImageStore.getState().images;
+      const image = images.find(img => img.id === note.imageId);
+      if (!image) throw new Error('Image not found');
+
+      const imgData = await imageToBase64(image.blobId);
+      if (!imgData) throw new Error('Image load failed');
+
+      const crossNodeContext = buildCrossNodeContext(noteId, noteType, note.imageId);
+      const imageDescription = await analyzeImageForContext(openRouterKey, imgData.base64, imgData.mimeType);
+
+      _sessionMeta.set(noteId, {
+        imageId: note.imageId,
+        categoryId: note.categoryId,
+        categoryLabel: getCategoryLabel(note.categoryId),
+      });
+
+      useVoiceQuizStore.getState()._set({ imageDescription, crossNodeContext });
+      await generateAndAsk();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed';
+      _set({ status: 'error', errorMessage: msg });
+    }
+  }, []);
+
+  // ─── Generate next question and begin listening ─────────────────────────────
+
+  async function generateAndAsk(clarifyFieldLabel?: string) {
     const state = useVoiceQuizStore.getState();
     const openRouterKey = useSettingsStore.getState().apiKey;
 
@@ -254,6 +370,7 @@ export function useVoiceQuiz() {
         emptyFields: state.emptyFields,
         messages: state.messages,
         lastAnswerWasConfused: state.lastQuestionWasConfused,
+        clarifyFieldLabel,
       });
 
       if (question.trim() === 'COMPLETE') {
@@ -261,7 +378,6 @@ export function useVoiceQuiz() {
         return;
       }
 
-      // Add AI message then go straight to listening (no TTS)
       const newMessages = [...state.messages, { role: 'ai' as const, text: question }];
       state._set({ messages: newMessages });
 
@@ -273,8 +389,8 @@ export function useVoiceQuiz() {
     }
   }
 
-  // Spawns a fresh SpeechRecognition instance and auto-restarts on browser cutoff.
-  // A fresh instance is required because browsers reject .start() on a used instance.
+  // ─── Speech recognition ────────────────────────────────────────────────────
+
   function spawnRecognition() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -294,11 +410,7 @@ export function useVoiceQuiz() {
       useVoiceQuizStore.getState()._set({ liveTranscript: transcript });
     };
 
-    recognition.onerror = () => { /* ignore — onend will handle restart */ };
-
-    // Browser silently ends recognition after silence even with continuous=true.
-    // Restart with a NEW instance (calling .start() on a stopped instance fails).
-    // Only restart if status is still 'listening' (manual stop sets it to 'processing' first).
+    recognition.onerror = () => { /* ignore */ };
     recognition.onend = () => {
       if (useVoiceQuizStore.getState().status === 'listening') {
         spawnRecognition();
@@ -317,11 +429,9 @@ export function useVoiceQuiz() {
 
     spawnRecognition();
 
-    // MediaRecorder for actual audio capture
     navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
       streamRef.current = stream;
 
-      // Determine supported mime type
       const mimeType = MediaRecorder.isTypeSupported('audio/webm')
         ? 'audio/webm'
         : MediaRecorder.isTypeSupported('audio/mp4')
@@ -347,7 +457,6 @@ export function useVoiceQuiz() {
   }
 
   function stopListening() {
-    // Flip status immediately so spawnRecognition's onend guard won't restart listening
     useVoiceQuizStore.getState()._set({ status: 'processing' });
 
     if (pauseTimerRef.current) {
@@ -359,13 +468,15 @@ export function useVoiceQuiz() {
       recognitionRef.current = null;
     }
     if (recorderRef.current && recorderRef.current.state !== 'inactive') {
-      recorderRef.current.stop(); // triggers onstop → processDirectorAnswer
+      recorderRef.current.stop();
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     }
   }
+
+  // ─── Process director's spoken answer ──────────────────────────────────────
 
   async function processDirectorAnswer(audioBlob: Blob) {
     const state = useVoiceQuizStore.getState();
@@ -378,12 +489,10 @@ export function useVoiceQuiz() {
       const finalText = await transcribeAudio(openAiKey, audioBlob);
 
       if (!finalText.trim()) {
-        // Empty transcription — re-ask
         await generateAndAsk();
         return;
       }
 
-      // Detect special intents
       const isConfused = /don't understand|what do you mean|rephrase|simpler|plain|huh\??/i.test(finalText);
       const isSkip = /skip|don't know|not sure yet|leave it|pass|next/i.test(finalText);
 
@@ -410,21 +519,48 @@ export function useVoiceQuiz() {
         return;
       }
 
-      // Add director answer to messages
       const newMessages = [...state.messages, { role: 'director' as const, text: finalText }];
-      state._set({
-        messages: newMessages,
-        liveTranscript: '',
-        lastQuestionWasConfused: false,
-      });
+      state._set({ messages: newMessages, liveTranscript: '', lastQuestionWasConfused: false });
 
-      // Extract resolved fields
       const resolved = await extractResolvedFields(
         openRouterKey,
         newMessages,
         state.emptyFields,
         state.allFields,
       );
+
+      // ── Improvement 1: CLARIFY MODE ──────────────────────────────────────
+      // If clarifyMode is on and any extracted fields are inferred, re-ask
+      // with a targeted clarification question instead of saving the guess.
+      if (state.clarifyMode && resolved.length > 0) {
+        const inferredNew = resolved.filter(f => f.wasInferred && !f.wasRejected);
+        const confirmedNew = resolved.filter(f => !f.wasInferred && !f.wasRejected);
+
+        if (inferredNew.length > 0) {
+          // Save confirmed fields only
+          const existingIds = new Set(state.filledFields.map(f => f.fieldId));
+          const newFilled = [...state.filledFields];
+          const newEmpty = [...state.emptyFields];
+
+          for (const f of confirmedNew) {
+            if (!existingIds.has(f.fieldId)) {
+              newFilled.push(f);
+              existingIds.add(f.fieldId);
+            } else {
+              const idx = newFilled.findIndex(x => x.fieldId === f.fieldId);
+              if (idx >= 0) newFilled[idx] = f;
+            }
+            const emptyIdx = newEmpty.indexOf(f.fieldLabel);
+            if (emptyIdx >= 0) newEmpty.splice(emptyIdx, 1);
+          }
+
+          state._set({ filledFields: newFilled, emptyFields: newEmpty });
+          // Re-ask with clarification about the first inferred field
+          await generateAndAsk(inferredNew[0].fieldLabel);
+          return;
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
 
       const existingIds = new Set(state.filledFields.map(f => f.fieldId));
       const newFilled = [...state.filledFields];
@@ -443,9 +579,6 @@ export function useVoiceQuiz() {
           if (emptyIdx >= 0) newEmpty.splice(emptyIdx, 1);
         }
       } else if (newEmpty.length > 0) {
-        // Extraction returned nothing — auto-advance past the current field
-        // to prevent the AI from asking the same question in a loop.
-        // Treat the director's response as an implicit fill for the first empty field.
         const skippedLabel = newEmpty[0];
         newEmpty.splice(0, 1);
         newFilled.push({
@@ -459,8 +592,6 @@ export function useVoiceQuiz() {
       }
 
       state._set({ filledFields: newFilled, emptyFields: newEmpty });
-
-      // Continue chain
       await generateAndAsk();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Processing failed';
@@ -468,11 +599,103 @@ export function useVoiceQuiz() {
     }
   }
 
+  // ─── Monologue recording ────────────────────────────────────────────────────
+
+  function startMonologueRecording() {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      streamRef.current = stream;
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/mp4')
+          ? 'audio/mp4'
+          : '';
+
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+
+      chunksRef.current = [];
+      recorder.ondataavailable = e => chunksRef.current.push(e.data);
+      recorder.onstop = async () => {
+        const mime = recorder.mimeType || 'audio/webm';
+        const audioBlob = new Blob(chunksRef.current, { type: mime });
+        await processMonologue(audioBlob);
+      };
+      recorder.start();
+      recorderRef.current = recorder;
+    }).catch(() => {
+      useVoiceQuizStore.getState()._set({ status: 'error', errorMessage: 'Microphone access denied' });
+    });
+  }
+
+  const stopMonologue = useCallback(() => {
+    useVoiceQuizStore.getState()._set({ status: 'monologue-processing' });
+
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+      recorderRef.current.stop();
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+  }, []);
+
+  async function processMonologue(audioBlob: Blob) {
+    const state = useVoiceQuizStore.getState();
+    const openAiKey = useSettingsStore.getState().openAiApiKey;
+    const openRouterKey = useSettingsStore.getState().apiKey;
+
+    try {
+      const transcript = await transcribeAudio(openAiKey, audioBlob);
+
+      if (!transcript.trim()) {
+        state._set({ status: 'error', errorMessage: 'No speech detected. Try again.' });
+        return;
+      }
+
+      state._set({ monologueTranscript: transcript });
+
+      const { extractFromMonologue } = await import('../utils/monologue-extractor');
+      const fieldDefs = state.allFields.map(label => ({
+        id: label.toLowerCase().replace(/\s+/g, '-'),
+        label,
+      }));
+
+      const extracted = await extractFromMonologue(
+        openRouterKey,
+        transcript,
+        fieldDefs,
+        state.imageDescription,
+      );
+
+      const describedLabels = new Set(extracted.map(f => f.fieldLabel));
+      const emptyAfterMonologue = state.emptyFields.filter(f => !describedLabels.has(f));
+
+      state._set({
+        filledFields: extracted,
+        emptyFields: emptyAfterMonologue,
+        status: 'confirming',
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Processing failed';
+      state._set({ status: 'error', errorMessage: msg });
+    }
+  }
+
+  // Continue with guided Q&A for fields not described in monologue
+  const continueWithGuidedAfterMonologue = useCallback(async () => {
+    useVoiceQuizStore.getState()._set({ inputMode: 'guided' });
+    await generateAndAsk();
+  }, []);
+
+  // ─── Confirm and write fields ───────────────────────────────────────────────
+
   const closeQuiz = useCallback(() => {
-    // Save progress so green dots persist when reopened
     const state = useVoiceQuizStore.getState();
     if (state.noteId && state.filledFields.length > 0) {
       _savedFields.set(state.noteId, [...state.filledFields]);
+      useSavedFieldsStore.getState().save(state.noteId, [...state.filledFields]);
     }
     stopAllMedia();
     useVoiceQuizStore.getState()._reset();
@@ -482,25 +705,44 @@ export function useVoiceQuiz() {
     const state = useVoiceQuizStore.getState();
     const boardStore = useBoardStore.getState();
 
-    const noteText = confirmedFields
-      .filter(f => !f.wasRejected)
-      .map(f => f.value)
-      .join('. ');
+    const activeFields = confirmedFields.filter(f => !f.wasRejected);
 
-    if (state.noteType === 'category' && state.noteId) {
-      await boardStore.updateCategoryNote(state.noteId, { text: noteText });
-    } else if (state.noteType === 'edit' && state.noteId) {
-      await boardStore.updateEditNote(state.noteId, { text: noteText });
-    }
+    if (state.singleFieldMode && state.noteId) {
+      // Merge with previously saved fields — replace only the target field
+      const prevFields = _savedFields.get(state.noteId) || [];
+      const mergedFields = prevFields.filter(f => f.fieldId !== state.targetFieldId);
+      mergedFields.push(...activeFields);
 
-    // Save confirmed fields
-    if (state.noteId) {
-      _savedFields.set(state.noteId, [...confirmedFields]);
+      const finalText = mergedFields.map(f => f.value).join('. ');
+
+      if (state.noteType === 'category') {
+        await boardStore.updateCategoryNote(state.noteId, { text: finalText });
+      } else if (state.noteType === 'edit') {
+        await boardStore.updateEditNote(state.noteId, { text: finalText });
+      }
+
+      _savedFields.set(state.noteId, mergedFields);
+      useSavedFieldsStore.getState().save(state.noteId, mergedFields);
+    } else {
+      const noteText = activeFields.map(f => f.value).join('. ');
+
+      if (state.noteType === 'category' && state.noteId) {
+        await boardStore.updateCategoryNote(state.noteId, { text: noteText });
+      } else if (state.noteType === 'edit' && state.noteId) {
+        await boardStore.updateEditNote(state.noteId, { text: noteText });
+      }
+
+      if (state.noteId) {
+        _savedFields.set(state.noteId, [...confirmedFields]);
+        useSavedFieldsStore.getState().save(state.noteId, [...confirmedFields]);
+      }
     }
 
     stopAllMedia();
     useVoiceQuizStore.getState()._reset();
   }, []);
+
+  // ─── Field editing / rejection ──────────────────────────────────────────────
 
   const editField = useCallback((fieldId: string, newValue: string) => {
     const state = useVoiceQuizStore.getState();
@@ -520,13 +762,38 @@ export function useVoiceQuiz() {
     });
   }, []);
 
-  const retryQuestion = useCallback(() => {
-    generateAndAsk();
+  // Improvement 4 — mark an inferred field as confirmed by the director
+  const confirmInferredField = useCallback((fieldId: string) => {
+    const state = useVoiceQuizStore.getState();
+    state._set({
+      filledFields: state.filledFields.map(f =>
+        f.fieldId === fieldId ? { ...f, isConfirmedByDirector: true } : f
+      ),
+    });
   }, []);
 
-  const manualStopListening = useCallback(() => {
-    stopListening();
+  // ─── Ownership controls ─────────────────────────────────────────────────────
+
+  const setClarifyMode = useCallback((on: boolean) => {
+    useVoiceQuizStore.getState()._set({ clarifyMode: on });
   }, []);
+
+  const setFieldOwnership = useCallback((fieldLabel: string, ownership: 'decide' | 'ai' | 'skip') => {
+    const { fieldOwnership } = useVoiceQuizStore.getState();
+    useVoiceQuizStore.getState()._set({
+      fieldOwnership: { ...fieldOwnership, [fieldLabel]: ownership },
+    });
+  }, []);
+
+  const setAllOwnership = useCallback((ownership: 'decide' | 'ai' | 'skip') => {
+    const { fieldOwnership } = useVoiceQuizStore.getState();
+    const next = { ...fieldOwnership };
+    Object.keys(next).forEach(k => { next[k] = ownership; });
+    useVoiceQuizStore.getState()._set({ fieldOwnership: next });
+  }, []);
+
+  const retryQuestion = useCallback(() => { generateAndAsk(); }, []);
+  const manualStopListening = useCallback(() => { stopListening(); }, []);
 
   return {
     ...store,
@@ -538,5 +805,15 @@ export function useVoiceQuiz() {
     retryQuestion,
     manualStopListening,
     startListening,
+    // New
+    startFromOwnership,
+    selectMode,
+    stopMonologue,
+    continueWithGuidedAfterMonologue,
+    openSingleFieldQuiz,
+    confirmInferredField,
+    setClarifyMode,
+    setFieldOwnership,
+    setAllOwnership,
   };
 }
