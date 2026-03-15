@@ -385,7 +385,8 @@ export function useVoiceQuiz() {
 
       // Detect special intents
       const isConfused = /don't understand|what do you mean|rephrase|simpler|plain|huh\??/i.test(finalText);
-      const isSkip = /skip|don't know|not sure yet|leave it|pass|next/i.test(finalText);
+      // Use word boundaries so "passing", "skipping", etc. don't trigger skip intent
+      const isSkip = /\b(skip|pass|next)\b|\bdon't know\b|\bnot sure yet\b|\bleave it\b/i.test(finalText);
 
       if (isConfused) {
         state._set({ lastQuestionWasConfused: true });
@@ -439,7 +440,8 @@ export function useVoiceQuiz() {
             const idx = newFilled.findIndex(x => x.fieldId === f.fieldId);
             if (idx >= 0) newFilled[idx] = f;
           }
-          const emptyIdx = newEmpty.indexOf(f.fieldLabel);
+          // Case-insensitive match — AI may return "Shot duration" vs "Shot Duration"
+          const emptyIdx = newEmpty.findIndex(e => e.toLowerCase() === f.fieldLabel.toLowerCase());
           if (emptyIdx >= 0) newEmpty.splice(emptyIdx, 1);
         }
       } else if (newEmpty.length > 0) {
@@ -476,6 +478,17 @@ export function useVoiceQuiz() {
     }
     stopAllMedia();
     useVoiceQuizStore.getState()._reset();
+  }, []);
+
+  // End Session: if fields were captured, go to review instead of discarding
+  const endSession = useCallback(() => {
+    const state = useVoiceQuizStore.getState();
+    if (state.filledFields.filter(f => !f.wasRejected).length > 0) {
+      stopAllMedia();
+      state._set({ status: 'confirming' });
+      return;
+    }
+    closeQuiz();
   }, []);
 
   const confirmFields = useCallback(async (confirmedFields: FilledField[]) => {
@@ -532,6 +545,7 @@ export function useVoiceQuiz() {
     ...store,
     openQuiz,
     closeQuiz,
+    endSession,
     confirmFields,
     editField,
     rejectField,

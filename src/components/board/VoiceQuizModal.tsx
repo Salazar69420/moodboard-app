@@ -584,7 +584,7 @@ function Overlay({ quiz }: { quiz: ReturnType<typeof useVoiceQuiz> }) {
 
                 {!isConfirming && (
                   <button
-                    onClick={quiz.closeQuiz}
+                    onClick={quiz.endSession}
                     style={{
                       background: 'rgba(248,113,113,0.06)',
                       border: '1px solid rgba(248,113,113,0.15)',

@@ -336,10 +336,12 @@ FIELDS: ${allFields.join(', ')}
 STILL EMPTY: ${emptyFields.join(', ')}
 
 EXTRACTION RULES:
+- CRITICAL: Directors often answer MULTIPLE fields in one response. Extract EVERY field you can find evidence for across ALL empty fields — not just the field the AI asked about.
 - "yeah that", "keep it", "as is", "like the reference" → extract using what the AI described in its question as the value
 - "I want X" → extract X directly
 - One-word answers ("centered", "static", "warm") → that's the value
 - Indirect answers ("it's anime", "like a Wes Anderson film") → extract as-is, set wasInferred: true
+- If the director says "wide shot", extract Shot Type. If they also say "centered", extract Framing. If they say "doesn't move" or "still", extract Camera Movement as "static / locked off". Grab everything.
 - ALWAYS try to extract something. Only return [] if the director literally said nothing useful.
 
 Return JSON array only:
