@@ -3,7 +3,6 @@ import { useUIStore } from '../../stores/useUIStore';
 import { useImageStore } from '../../stores/useImageStore';
 import { useProjectStore } from '../../stores/useProjectStore';
 import { useBoardStore } from '../../stores/useBoardStore';
-import { useSettingsStore } from '../../stores/useSettingsStore';
 import { copyImageToClipboard } from '../../utils/clipboard';
 import { downloadMedia } from '../../utils/download';
 import { SHOT_CATEGORIES, EDIT_CATEGORIES } from '../../types';
