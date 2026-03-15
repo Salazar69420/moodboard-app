@@ -29,11 +29,6 @@ export function ImageContextMenu() {
   const projects = useProjectStore((s) => s.projects);
   const incrementImageCount = useProjectStore((s) => s.incrementImageCount);
   const createProject = useProjectStore((s) => s.createProject);
-  const apiKey = useSettingsStore((s) => s.apiKey);
-  const model = useSettingsStore((s) => s.model);
-  const godModeNodes = useBoardStore((s) => s.godModeNodes);
-  const addCategoryNoteAction = useBoardStore((s) => s.addCategoryNote);
-  const addEditNoteAction = useBoardStore((s) => s.addEditNote);
 
   const [showNoteSubmenu, setShowNoteSubmenu] = useState(false);
   const [showMoveSubmenu, setShowMoveSubmenu] = useState(false);
@@ -44,8 +39,7 @@ export function ImageContextMenu() {
     if (!contextMenu.visible) {
       setShowNoteSubmenu(false);
       setShowMoveSubmenu(false);
-      setShowReverseEngineer(false);
-      setReverseLoading(false);
+
       setNewProjectName('');
       setActiveSection('i2v');
       return;
@@ -557,7 +551,7 @@ export function ImageContextMenu() {
         {/* ── Move to Project ── */}
         <div style={{ position: 'relative' }}>
           <button
-            onClick={(e) => { e.stopPropagation(); setShowMoveSubmenu(!showMoveSubmenu); setShowReverseEngineer(false); }}
+            onClick={(e) => { e.stopPropagation(); setShowMoveSubmenu(!showMoveSubmenu); }}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 9,
               padding: '7px 10px', borderRadius: 8, background: 'transparent',

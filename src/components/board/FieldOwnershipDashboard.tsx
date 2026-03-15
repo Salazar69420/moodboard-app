@@ -66,7 +66,7 @@ export function FieldOwnershipDashboard({
   const allCats = [...SHOT_CATEGORIES, ...EDIT_CATEGORIES];
   const category = allCats.find(c => c.id === categoryId);
   const categoryColor = category?.color || '#60a5fa';
-  const categoryLabel = category?.label || categoryId || '';
+  const _categoryLabel = category?.label || categoryId || '';
 
   const decideCount = allFields.filter(f => (fieldOwnership[f] ?? 'decide') === 'decide').length;
   const canStart = decideCount > 0;
