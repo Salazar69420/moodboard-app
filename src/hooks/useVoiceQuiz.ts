@@ -10,7 +10,6 @@ import {
   generateNextQuestion,
   extractResolvedFields,
   transcribeAudio,
-  speakText,
   getCategoryFields,
   getCategoryLabel,
   type QuizMessage,
@@ -214,7 +213,6 @@ export function useVoiceQuiz() {
   async function generateAndAsk() {
     const state = useVoiceQuizStore.getState();
     const openRouterKey = useSettingsStore.getState().apiKey;
-    const openAiKey = useSettingsStore.getState().openAiApiKey;
 
     state._set({ status: 'thinking' });
 
