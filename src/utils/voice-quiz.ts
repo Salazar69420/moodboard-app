@@ -249,6 +249,7 @@ export async function generateNextQuestion(
     imageDescription: string;
     crossNodeContext: string;
     emptyFields: string[];
+    addressedFields: string[];
     messages: QuizMessage[];
     lastAnswerWasConfused: boolean;
   },
@@ -260,24 +261,27 @@ export async function generateNextQuestion(
   const systemPrompt = `You are a friendly, sharp creative collaborator helping a film director plan the "${params.nodeLabel}" aspect of their shot. You're like a trusted AD who keeps things moving and gets the director's intent on the first try.
 
 YOUR STYLE:
-- Warm, quick, fun. Like a creative jam session, not an interrogation.
-- ONE question only. Keep it to 1 sentence. Be specific to what you see in the image.
-- Give 2-3 options pulled from the actual image when it helps — "the cold blue tones or something warmer?" not generic film school options.
-- Accept ANY answer — even one-word or vague answers. If they say "yeah that" or "keep it as is", that's a valid answer. Move on.
-- Reference the image directly: "I see the snow falling…", "With the character standing center frame…"
+- Warm, quick, natural. Like a creative conversation, not a form.
+- If the director just gave a detailed answer, open with a 2-4 word acknowledgment of what they said ("Got it — pull-back reveal.", "Nice, static lock.") then ask the next question. Keep the acknowledgment tight.
+- ONE question only. 1 sentence max. Be specific to what you see in the image.
+- Give 2-3 concrete options tied to the image when useful — not generic textbook choices.
+- Accept ANY clear answer. If they say "yeah that" or "keep it as is", confirm it and move on.
+- Reference the image directly: "I see the characters silhouetted…", "With the snow falling in the background…"
 
 ABSOLUTE RULES:
-- ${params.emptyFields.length === 0 ? 'ALL fields are filled. Respond with exactly: COMPLETE' : `Ask about the NEXT empty field: "${params.emptyFields[0]}". Do NOT ask about any other field.`}
-- NEVER ask about a field that isn't in the EMPTY list below.
-- NEVER repeat or rephrase a question you already asked.
+- ${params.emptyFields.length === 0 ? 'ALL fields are filled. Respond with exactly: COMPLETE' : `Ask ONLY about the field named "${params.emptyFields[0]}". Your question must be clearly and specifically about that field.`}
+- FIELD DEFINITIONS to help you ask precisely: Shot Type = framing distance (ECU/CU/MS/WS/ELS). Camera Movement = motion (static/dolly/pan/push/pull). Angle = camera tilt (eye-level/high/low/dutch). Framing = composition rule (centered/rule-of-thirds/negative space). Stability = rig type (locked/handheld/gimbal). Shot Duration = how long the shot holds. Follow Style = how camera relates to subject movement.
+- NEVER ask about a field in the ALREADY ADDRESSED list below — those are done.
+- NEVER repeat or rephrase a question you already asked in the conversation.
 - When no empty fields remain → respond with exactly: COMPLETE
 - ${params.lastAnswerWasConfused ? 'Last answer was confused — rephrase super simply, no film jargon at all.' : ''}
 
 IMAGE: ${params.imageDescription}
 ${params.crossNodeContext !== 'No other nodes filled yet.' ? `ALREADY DECIDED:\n${params.crossNodeContext}` : ''}
-EMPTY FIELDS: ${params.emptyFields.join(', ') || 'NONE — say COMPLETE'}
+EMPTY FIELDS (ask about the FIRST one only): ${params.emptyFields.join(', ') || 'NONE — say COMPLETE'}
+ALREADY ADDRESSED THIS SESSION — DO NOT ASK ABOUT THESE: ${params.addressedFields.length > 0 ? params.addressedFields.join(', ') : 'none yet'}
 
-${conversationFormatted ? `CONVERSATION:\n${conversationFormatted}` : ''}`;
+${conversationFormatted ? `CONVERSATION SO FAR:\n${conversationFormatted}` : ''}`;
 
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -330,25 +334,25 @@ export async function extractResolvedFields(
       messages: [
         {
           role: 'system',
-          content: `Extract field values from this director interview. Be AGGRESSIVE — if the director gave any kind of answer (even vague, one-word, or "keep it as is"), extract it.
+          content: `Extract field values from a director interview. Only extract what the director EXPLICITLY stated — never guess, infer, or fill in gaps.
 
 FIELDS: ${allFields.join(', ')}
 STILL EMPTY: ${emptyFields.join(', ')}
 
 EXTRACTION RULES:
-- CRITICAL: Directors often answer MULTIPLE fields in one response. Extract EVERY field you can find evidence for across ALL empty fields — not just the field the AI asked about.
-- "yeah that", "keep it", "as is", "like the reference" → extract using what the AI described in its question as the value
-- "I want X" → extract X directly
-- One-word answers ("centered", "static", "warm") → that's the value
-- Indirect answers ("it's anime", "like a Wes Anderson film") → extract as-is, set wasInferred: true
-- If the director says "wide shot", extract Shot Type. If they also say "centered", extract Framing. If they say "doesn't move" or "still", extract Camera Movement as "static / locked off". Grab everything.
-- ALWAYS try to extract something. Only return [] if the director literally said nothing useful.
+- A director EXPLICITLY stated something if they used words that directly describe the field.
+- Extract from ALL fields when the director covers multiple in one answer — not just the field the AI asked about.
+- "yeah that" / "keep it" / "like in the image" → extract the value the AI described in its question (wasInferred: false — this is the director confirming, not you guessing).
+- Direct statements ("wide shot", "camera doesn't move", "centered", "5 seconds") → extract exactly as said (wasInferred: false).
+- Vague non-answers ("something like that", "you know", "whatever works") → set wasInferred: true.
+- If the director said NOTHING relevant to a field, do NOT extract it. Return [] for that field.
+- Never fabricate values. Only the director's own words count.
 
 Return JSON array only:
-[{ "fieldId": "field-name-kebab", "fieldLabel": "Field Name", "value": "short cinematic description for shot notes", "sourceWords": "director's words", "wasInferred": false }]
+[{ "fieldId": "field-name-kebab", "fieldLabel": "Field Name", "value": "director's intent in concise shot-note form", "sourceWords": "director's exact words", "wasInferred": false }]
 
-"value" should be polished for shot notes — concise, specific, professional.
-"sourceWords" should be the director's actual words.
+"value" = director's idea polished to professional shot-note language (keep their intent intact).
+"sourceWords" = their actual words verbatim.
 Return ONLY valid JSON. No markdown, no explanation.`,
         },
         { role: 'user', content: conversationFormatted },

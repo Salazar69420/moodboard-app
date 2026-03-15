@@ -419,45 +419,38 @@ export function useVoiceQuiz() {
         lastQuestionWasConfused: false,
       });
 
-      // Extract resolved fields
-      const resolved = await extractResolvedFields(
+      // Extract resolved fields — only keep what the director explicitly stated
+      const resolved = (await extractResolvedFields(
         openRouterKey,
         newMessages,
         state.emptyFields,
         state.allFields,
-      );
+      )).filter(f => !f.wasInferred);
 
       const existingIds = new Set(state.filledFields.map(f => f.fieldId));
       const newFilled = [...state.filledFields];
       const newEmpty = [...state.emptyFields];
 
-      if (resolved.length > 0) {
-        for (const f of resolved) {
-          if (!existingIds.has(f.fieldId)) {
-            newFilled.push(f);
-            existingIds.add(f.fieldId);
-          } else {
-            const idx = newFilled.findIndex(x => x.fieldId === f.fieldId);
-            if (idx >= 0) newFilled[idx] = f;
-          }
-          // Case-insensitive match — AI may return "Shot duration" vs "Shot Duration"
-          const emptyIdx = newEmpty.findIndex(e => e.toLowerCase() === f.fieldLabel.toLowerCase());
-          if (emptyIdx >= 0) newEmpty.splice(emptyIdx, 1);
+      // The field the AI just asked about — always advance past it after any answer
+      const askedField = state.emptyFields[0];
+
+      for (const f of resolved) {
+        if (!existingIds.has(f.fieldId)) {
+          newFilled.push(f);
+          existingIds.add(f.fieldId);
+        } else {
+          const idx = newFilled.findIndex(x => x.fieldId === f.fieldId);
+          if (idx >= 0) newFilled[idx] = f;
         }
-      } else if (newEmpty.length > 0) {
-        // Extraction returned nothing — auto-advance past the current field
-        // to prevent the AI from asking the same question in a loop.
-        // Treat the director's response as an implicit fill for the first empty field.
-        const skippedLabel = newEmpty[0];
+        // Case-insensitive match — AI may return "Shot duration" vs "Shot Duration"
+        const emptyIdx = newEmpty.findIndex(e => e.toLowerCase() === f.fieldLabel.toLowerCase());
+        if (emptyIdx >= 0) newEmpty.splice(emptyIdx, 1);
+      }
+
+      // Always advance past the asked field — if extraction didn't cover it,
+      // the director moved on and we skip it (no inferring, no re-asking).
+      if (askedField && newEmpty[0] === askedField) {
         newEmpty.splice(0, 1);
-        newFilled.push({
-          fieldId: skippedLabel.toLowerCase().replace(/\s+/g, '-'),
-          fieldLabel: skippedLabel,
-          value: finalText,
-          sourceWords: finalText,
-          wasInferred: true,
-          wasRejected: false,
-        });
       }
 
       state._set({ filledFields: newFilled, emptyFields: newEmpty });
@@ -480,11 +473,45 @@ export function useVoiceQuiz() {
     useVoiceQuizStore.getState()._reset();
   }, []);
 
-  // End Session: if fields were captured, go to review instead of discarding
-  const endSession = useCallback(() => {
+  // End Session: run a final extraction sweep over the full conversation to capture
+  // anything mentioned but not yet filed, then go to review. No inferring.
+  const endSession = useCallback(async () => {
     const state = useVoiceQuizStore.getState();
+    stopAllMedia();
+
+    const openRouterKey = useSettingsStore.getState().apiKey;
+    const hasConversation = state.messages.length > 0;
+    const hasUnfilled = state.emptyFields.length > 0;
+
+    if (hasConversation && hasUnfilled && openRouterKey) {
+      state._set({ status: 'processing' });
+      try {
+        const finalResolved = (await extractResolvedFields(
+          openRouterKey,
+          state.messages,
+          state.emptyFields,
+          state.allFields,
+        )).filter(f => !f.wasInferred);
+
+        if (finalResolved.length > 0) {
+          const existingIds = new Set(state.filledFields.map(f => f.fieldId));
+          const newFilled = [...state.filledFields];
+          for (const f of finalResolved) {
+            if (!existingIds.has(f.fieldId)) {
+              newFilled.push(f);
+              existingIds.add(f.fieldId);
+            } else {
+              const idx = newFilled.findIndex(x => x.fieldId === f.fieldId);
+              if (idx >= 0) newFilled[idx] = f;
+            }
+          }
+          state._set({ filledFields: newFilled, status: 'confirming' });
+          return;
+        }
+      } catch { /* fall through */ }
+    }
+
     if (state.filledFields.filter(f => !f.wasRejected).length > 0) {
-      stopAllMedia();
       state._set({ status: 'confirming' });
       return;
     }
