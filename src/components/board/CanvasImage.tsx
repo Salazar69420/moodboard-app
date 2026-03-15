@@ -519,7 +519,7 @@ export const CanvasImage = memo(function CanvasImage({ image, zoomScale }: Canva
             )}
 
             {/* Color picker button */}
-            {isHovered && !IS_TOUCH && (
+            {(IS_TOUCH ? isSelected : isHovered) && (
               <button
                 onClick={(e) => { e.stopPropagation(); setShowColorPicker(!showColorPicker); }}
                 onPointerDown={e => e.stopPropagation()}
@@ -1068,7 +1068,7 @@ export const CanvasImage = memo(function CanvasImage({ image, zoomScale }: Canva
       )}
 
       {/* Floating Toolbar — shown when selected */}
-      {isSelected && !isConnectMode && !IS_TOUCH && (
+      {isSelected && !isConnectMode && (
         <FloatingToolbar image={image} displayW={displayW} displayH={displayH} />
       )}
 

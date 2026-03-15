@@ -653,7 +653,7 @@ export function CategoryNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
                                         outline: 'none',
                                         border: 'none',
                                         fontFamily: "'Inter', system-ui, sans-serif",
-                                        fontSize: 12,
+                                        fontSize: IS_TOUCH ? 16 : 12,
                                         color: 'rgba(255,255,255,0.72)',
                                         padding: '9px 11px 11px',
                                         lineHeight: '1.6',
