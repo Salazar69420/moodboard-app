@@ -94,7 +94,7 @@ export const SHOT_CATEGORIES: ShotCategory[] = [
     border: '#1e3a5f',
     icon: '📷',
     placeholder: 'e.g. Handheld tracking shot, low angle, slight tilt...',
-    prompts: ['Shot type?', 'Camera movement?', 'Angle?', 'Framing?'],
+    prompts: ['Shot type?', 'Camera movement?', 'Angle?', 'Framing?', 'Camera path?', 'Focus behavior?'],
   },
   {
     id: 'subject',
@@ -114,7 +114,7 @@ export const SHOT_CATEGORIES: ShotCategory[] = [
     border: '#3b1f5e',
     icon: '⚡',
     placeholder: 'e.g. Character runs toward camera, stumbles, looks back...',
-    prompts: ['What happens?', 'Speed / pacing?', 'Key beat?', 'Transition out?'],
+    prompts: ['What happens?', 'Speed / pacing?', 'Key beat?', 'Transition out?', 'Motion quality?', 'Shot duration feel?'],
   },
   {
     id: 'environment',
@@ -124,7 +124,7 @@ export const SHOT_CATEGORIES: ShotCategory[] = [
     border: '#4a2c10',
     icon: '🌍',
     placeholder: 'e.g. Abandoned warehouse, dusk, fog rolling in...',
-    prompts: ['Location / setting?', 'Time of day?', 'Weather?', 'Era / period?'],
+    prompts: ['Location / setting?', 'Time of day?', 'Weather?', 'Era / period?', 'Environmental motion?'],
   },
   {
     id: 'lighting',
@@ -144,7 +144,7 @@ export const SHOT_CATEGORIES: ShotCategory[] = [
     border: '#0f3d39',
     icon: '🖼️',
     placeholder: 'e.g. Film grain, analog noise, shallow DOF with lens flares...',
-    prompts: ['Film look / grain?', 'Lens character?', 'Color grade style?', 'VFX / comp notes?'],
+    prompts: ['Film look / grain?', 'Lens character?', 'Color grade style?', 'VFX / comp notes?', 'Temporal effects?'],
   },
   {
     id: 'audio',
@@ -236,6 +236,9 @@ export const EDIT_CATEGORIES: EditCategory[] = [
       'Face: eyes, jawline, expression?',
       'Hair: color, style, length?',
       'Clothing: fabric, fit, details?',
+      'Skin tone & texture?',
+      'Facial hair?',
+      'Accessories & details?',
     ],
   },
   {
@@ -252,6 +255,9 @@ export const EDIT_CATEGORIES: EditCategory[] = [
       'Body posture & weight?',
       'Facial expression & gaze?',
       'Props being held or used?',
+      'Pose energy?',
+      'Makeup & grooming?',
+      'Markings & skin detail?',
     ],
   },
   {
@@ -268,6 +274,7 @@ export const EDIT_CATEGORIES: EditCategory[] = [
       'Time of day & natural light?',
       'Background details & props?',
       'Atmosphere: warm, cold, busy?',
+      'Composition device?',
     ],
   },
   {
@@ -284,6 +291,7 @@ export const EDIT_CATEGORIES: EditCategory[] = [
       'Film or digital? Shot on what?',
       'Editorial, cinematic, or UGC?',
       'Era, movement, or reference?',
+      'Render / art style?',
     ],
   },
   {
@@ -838,6 +846,73 @@ export const SHOT_DIRECTOR_GUIDES: Record<string, DirectorGuide> = {
       { name: 'POLAR', label: 'Polarizer', effect: 'Cuts reflections, deepens sky contrast, saturates colors. Outdoor cinematography staple.', insert: 'polarizing filter, cut reflections', subOptions: [{ name: 'Circular polar', insert: 'circular polarizer, deep sky and reflections cut' }, { name: 'Warm polar', insert: 'polarizer with warm 81A correction' }, { name: 'Sky deepener', insert: 'polarizer maximizing sky contrast' }] },
     ],
   },
+  // ── I2V MOTION & TEMPORAL ──
+  'Camera path?': {
+    context: 'Camera path describes the physical trajectory the camera travels through space — separate from its rotation.',
+    options: [
+      { name: 'ARC', label: 'Orbital Arc', effect: 'Camera sweeps around the subject in a curved arc. Creates dynamic three-dimensionality and reveals the subject from all sides.', insert: 'orbital arc, camera sweeps around subject', subOptions: [{ name: 'Quarter arc', insert: 'quarter-circle arc around subject' }, { name: 'Half arc', insert: 'half-circle arc, sweeping reveal' }, { name: 'Tight arc', insert: 'tight close orbital arc, subject fills frame throughout' }] },
+      { name: 'CRANE', label: 'Crane / Vertical Rise', effect: 'Camera rises or descends vertically. Ascent signals scale, hope, or departure. Descent signals descent into something.', insert: 'slow crane up, vertical ascending camera', subOptions: [{ name: 'Crane up', insert: 'crane up, slow vertical rise, ascending reveal' }, { name: 'Crane down', insert: 'crane down, descending into scene' }, { name: 'Pedestal up', insert: 'subtle pedestal rise, subject grows in frame' }] },
+      { name: 'COMBO', label: 'Combined Move', effect: 'Two simultaneous movements — push and pan, pull and tilt, or arc and rise. Creates complex filmic depth.', insert: 'combined camera move, simultaneous push and pan', subOptions: [{ name: 'Push + pan', insert: 'push-in while slowly panning, combined forward and lateral' }, { name: 'Pull + tilt up', insert: 'dolly pull-out while tilting up, retreating reveal' }, { name: 'Arc + rise', insert: 'orbital arc combined with vertical crane rise' }] },
+      { name: 'FLOAT', label: 'Weightless Float', effect: 'Camera drifts with no fixed direction — organic, searching, dreamlike. No clear origin or destination.', insert: 'weightless floating drift, undirected organic movement', subOptions: [{ name: 'Gentle drift', insert: 'gentle weightless drift, barely perceptible' }, { name: 'Searching float', insert: 'searching float, slightly lost quality' }, { name: 'Dreamy wander', insert: 'dreamlike wandering camera, no clear path' }] },
+      { name: 'CIRCLE', label: 'Full 360° Orbit', effect: 'Complete orbit around the subject. Used for revelation, triumphant moments, or complete environmental context.', insert: 'full 360-degree orbit around subject', subOptions: [{ name: 'Slow full orbit', insert: 'slow complete 360 orbit, full environment revealed' }, { name: 'Fast spin', insert: 'fast circular spin around subject, kinetic energy' }, { name: 'Tight 360', insert: 'tight 360 orbit, subject always dominant' }] },
+      { name: 'RVRSE', label: 'Reverse Dolly Turn', effect: 'Camera retreats while pivoting to keep subject in frame. Creates a sense of world expanding or subject being left behind.', insert: 'reverse dolly with compensating pan, retreating while holding subject', subOptions: [{ name: 'Retreat reveal', insert: 'retreating dolly revealing wider world behind subject' }, { name: 'Slow reverse', insert: 'slow reverse dolly, world expanding around character' }] },
+    ],
+  },
+  'Focus behavior?': {
+    context: 'Focus behavior describes how the focal plane changes — or stays locked — during the shot. It directs the eye and controls information.',
+    options: [
+      { name: 'HOLD', label: 'Locked Focus', effect: 'Focus stays locked on the subject throughout. Clean and confident — the camera knows exactly what matters.', insert: 'focus locked on subject throughout, no pull', subOptions: [{ name: 'Subject locked', insert: 'focus locked on subject, never drifts' }, { name: 'Eyes locked', insert: 'focus pinned to subject eyes throughout' }] },
+      { name: 'RACK', label: 'Rack Focus', effect: 'Focus shifts from foreground to background (or reverse). Redirects audience attention mid-shot — a reveal without a cut.', insert: 'rack focus, foreground to background shift', subOptions: [{ name: 'FG to BG', insert: 'rack focus from foreground to background subject' }, { name: 'BG to FG', insert: 'rack focus from background to foreground reveal' }, { name: 'Slow rack', insert: 'slow deliberate rack focus, gradual attention shift' }, { name: 'Snap rack', insert: 'snap rack focus, fast decisive focus pull' }] },
+      { name: 'PULL', label: 'Focus Pull to New Subject', effect: 'Focus moves to a new element entering frame. The audience discovers something without a cut.', insert: 'focus pull to new subject entering frame', subOptions: [{ name: 'Pull to arrival', insert: 'focus pulls to new character entering background' }, { name: 'Pull to detail', insert: 'focus pulls to significant prop or detail' }, { name: 'Pull to reveal', insert: 'focus pulls to reveal something previously blurred' }] },
+      { name: 'DEEP', label: 'Deep Focus Hold', effect: 'Hyperfocal setting — everything sharp from foreground to background throughout. The audience chooses where to look.', insert: 'hyperfocal deep focus throughout, everything sharp front to back', subOptions: [{ name: 'Full depth hold', insert: 'deep focus maintained entirely, near to far sharp' }, { name: 'Citizen Kane', insert: 'deep focus hold, Citizen Kane style, all planes readable' }] },
+      { name: 'BREATHE', label: 'Focus Breathing', effect: 'Subtle in-and-out focus shift — the lens breathes. Creates organic, alive quality. Common in vintage glass.', insert: 'lens breathing, subtle living focus shift', subOptions: [{ name: 'Gentle breathe', insert: 'gentle focus breathing, barely perceptible organic pulse' }, { name: 'Vintage breathe', insert: 'vintage lens breathing quality, warm and imperfect' }] },
+      { name: 'DRIFT', label: 'Focus Drift', effect: 'Focus slowly drifts away from subject toward soft abstraction. Used for dreamlike, dissociation, or memory effects.', insert: 'focus drifts to soft bokeh abstraction', subOptions: [{ name: 'Slow drift out', insert: 'focus slowly drifts to soft bokeh, subject dissolves' }, { name: 'Drift to detail', insert: 'focus drifts to background detail, subject blurs' }] },
+    ],
+  },
+  'Motion quality?': {
+    context: 'Motion quality describes the physical character of how the subject moves — independent of speed. This is the texture of the movement itself.',
+    options: [
+      { name: 'FLUID', label: 'Fluid / Organic', effect: 'Naturally flowing, continuous, organic motion. Nothing mechanical or forced. The body moves as water.', insert: 'fluid organic movement, naturally flowing motion', subOptions: [{ name: 'Dancer fluid', insert: 'dancer-quality fluid movement, graceful continuous flow' }, { name: 'Water-like', insert: 'water-like fluidity, continuous unbroken motion' }, { name: 'Effortless', insert: 'effortlessly fluid motion, no visible effort' }] },
+      { name: 'MECH', label: 'Mechanical / Robotic', effect: 'Rigid, precise, stop-start motion. Inhuman quality — controlled to the point of wrongness.', insert: 'mechanical rigid movement, robotic precision', subOptions: [{ name: 'Stop-start', insert: 'stop-start mechanical motion, sudden position snaps' }, { name: 'Robotic', insert: 'robotic precision movement, inhuman control' }, { name: 'Puppet-like', insert: 'puppet-like jerky mechanical motion' }] },
+      { name: 'TWITCHY', label: 'Twitchy / Nervous', effect: 'Micro-jerks and nervous small movements. Anxiety made physical — the body cannot fully hold still.', insert: 'twitchy micro-movements, nervous physical energy', subOptions: [{ name: 'Micro-jerks', insert: 'micro-jerk twitches, nervous suppressed energy' }, { name: 'Restless', insert: 'restless fidgeting, unable to be fully still' }, { name: 'Trauma twitch', insert: 'involuntary micro-twitching, post-trauma body' }] },
+      { name: 'SLOWBRN', label: 'Slow Burn', effect: 'Imperceptibly slow drift or motion. The audience cannot identify when movement began — only that something has changed.', insert: 'imperceptibly slow movement, barely perceptible drift', subOptions: [{ name: 'Glacial drift', insert: 'glacial drift, movement only visible across time' }, { name: 'Predatory slow', insert: 'predatory slow movement, controlled and deliberate threat' }, { name: 'Meditation slow', insert: 'meditative slow motion, conscious deliberate pace' }] },
+      { name: 'JOLT', label: 'Jolt / Snap', effect: 'Sudden burst of movement from stillness. Shock, revelation, or violence signaled by contrast with surrounding stillness.', insert: 'sudden jolting snap movement, burst from stillness', subOptions: [{ name: 'Flinch', insert: 'sudden flinch or recoil, involuntary jolt' }, { name: 'Lunge', insert: 'sudden forward lunge from held position' }, { name: 'Head snap', insert: 'sharp head snap turn, sudden attention shift' }] },
+      { name: 'GHOST', label: 'Ghost / Smear', effect: 'Motion blur creates visible ghost trails. Movement leaves a trace in the frame — temporal smear.', insert: 'motion blur ghost trails, temporal movement smear', subOptions: [{ name: 'Light smear', insert: 'light motion smear, subtle ghosting on movement' }, { name: 'Heavy ghost', insert: 'heavy ghost trail, strong motion blur on action' }, { name: 'Strobe ghost', insert: 'stroboscopic ghost, multiple exposure on movement' }] },
+    ],
+  },
+  'Shot duration feel?': {
+    context: 'Shot duration feel describes the intended temporal weight of the clip — from quick impact to contemplative extended take.',
+    options: [
+      { name: 'SNAP', label: 'Snap Cut (2-3s)', effect: 'Under 3 seconds of pure kinetic impact. One idea, one feeling, no room to breathe. Cut before the audience expects.', insert: '2-3 second snap cut, pure impact, single beat', subOptions: [{ name: 'Impact flash', insert: 'flash cut, under 2 seconds, pure visual impact' }, { name: '3s snap', insert: '3 second snap cut, one idea complete' }] },
+      { name: 'PUNCHY', label: 'Punchy (4-6s)', effect: 'Short enough to feel urgent, long enough to land emotionally. The workhorse duration for action and tension.', insert: '4-6 second punchy shot, single story beat', subOptions: [{ name: '4s action', insert: '4 second action beat, tight and urgent' }, { name: '6s reaction', insert: '6 second reaction shot, brief emotional read' }] },
+      { name: 'BEAT', label: 'Story Beat (7-10s)', effect: 'A complete dramatic idea. Long enough to build micro-tension, short enough to stay intentional.', insert: '7-10 second story beat, single sustained dramatic idea', subOptions: [{ name: '8s dialogue', insert: '8 second dialogue beat, one exchange complete' }, { name: '10s reveal', insert: '10 second reveal shot, discovery lands fully' }] },
+      { name: 'BREATHE', label: 'Breathing Shot (11-20s)', effect: 'Contemplative duration. The audience is asked to sit with something — observation over event.', insert: '12-18 second breathing shot, contemplative extended duration', subOptions: [{ name: '12s observe', insert: '12 second observational shot, patient and still' }, { name: '18s hold', insert: '18 second held shot, tension builds in duration' }] },
+      { name: 'LONG', label: 'Extended Take (20s+)', effect: 'Long take territory. Duration becomes the statement — real time, performance, and tension sustained.', insert: 'extended take, 20+ seconds, duration is the point', subOptions: [{ name: 'Oner feel', insert: 'one-shot feel, unbroken extended take' }, { name: 'Real time', insert: 'real-time extended, clock-accurate sustained duration' }] },
+      { name: 'LOOP', label: 'Seamless Loop', effect: 'End frame matches start frame. Designed to repeat infinitely. Used for ambient, social media, or atmospheric content.', insert: 'seamless loop, end matches beginning, designed to repeat', subOptions: [{ name: 'Perfect loop', insert: 'perfect seamless loop, imperceptible repeat point' }, { name: 'Boomerang', insert: 'boomerang-style ping-pong loop' }] },
+    ],
+  },
+  'Environmental motion?': {
+    context: 'Environmental motion describes what is moving in the world around the subject — independent of the camera or the character.',
+    options: [
+      { name: 'STILL', label: 'Environment Still', effect: 'Only the subject moves — everything else is locked. Creates focus, control, or an uncanny suspended quality.', insert: 'environment completely still, only subject in motion', subOptions: [{ name: 'Frozen world', insert: 'frozen environment, world stopped around subject' }, { name: 'Vacuum still', insert: 'dead-still environment, eerie suspended quality' }] },
+      { name: 'WIND', label: 'Wind / Air', effect: 'Fabric, hair, leaves, and curtains move in air. Adds life, breath, and natural organic energy to the frame.', insert: 'wind moving fabric and hair, natural air movement in scene', subOptions: [{ name: 'Hair wind', insert: 'hair moving in wind, organic natural movement' }, { name: 'Fabric wind', insert: 'clothing fabric moving in wind, textile animation' }, { name: 'Leaves wind', insert: 'leaves and foliage moving in wind, environmental breath' }, { name: 'Curtain wind', insert: 'curtains or fabric panels billowing in wind' }] },
+      { name: 'CROWD', label: 'Crowd / Background Life', effect: 'Other people in the background are moving. Creates world, context, and the contrast of subject against the flow of life.', insert: 'background crowd movement, ambient human life in motion', subOptions: [{ name: 'Busy street', insert: 'busy pedestrian background, crowd flowing past' }, { name: 'Party crowd', insert: 'background party crowd, social energy in motion' }, { name: 'Incidental passerby', insert: 'single incidental person passing in background' }] },
+      { name: 'WATER', label: 'Water / Reflection', effect: 'Water moves — ripples, waves, reflections distort. Adds temporal rhythm and symbolic depth.', insert: 'water movement, ripples and shifting reflections', subOptions: [{ name: 'Rain surface', insert: 'rain hitting surface, ripple rings spreading' }, { name: 'Reflection distort', insert: 'water reflection shifting and distorting' }, { name: 'River flow', insert: 'river or stream flowing through background' }] },
+      { name: 'SMOKE', label: 'Smoke / Haze', effect: 'Atmospheric smoke, haze, or fog drifts through the scene. Adds depth, mystery, and separates foreground from background.', insert: 'drifting smoke or atmospheric haze moving through scene', subOptions: [{ name: 'Thin haze', insert: 'thin atmospheric haze drifting slowly' }, { name: 'Thick smoke', insert: 'thick smoke rolling through frame' }, { name: 'Fog creep', insert: 'low ground fog creeping through scene' }] },
+      { name: 'BUSTLE', label: 'Urban Bustle', effect: 'City life in constant motion — traffic, lights, signs, distant movement. Subject exists within the indifferent energy of a city.', insert: 'urban background bustle, city life in constant motion', subOptions: [{ name: 'Traffic flow', insert: 'traffic moving in background, headlights and flow' }, { name: 'Neon flicker', insert: 'neon signs and urban lights flickering in background' }, { name: 'Market bustle', insert: 'busy market or commercial street in background movement' }] },
+    ],
+  },
+  'Temporal effects?': {
+    context: 'Temporal effects are time-based visual treatments — how movement is captured and rendered across the duration of the shot.',
+    options: [
+      { name: 'CRISP', label: 'Zero Motion Blur', effect: 'Every frame sharp regardless of movement speed. Hyper-real, digital, precise. Nothing smears.', insert: 'zero motion blur, crisp sharp movement throughout', subOptions: [{ name: 'Sharp action', insert: 'sharp crisp action, no motion blur whatsoever' }, { name: 'High shutter', insert: 'high shutter speed, frozen movement at every frame' }] },
+      { name: 'MBLUR', label: 'Heavy Motion Blur', effect: "Long shutter, cinematic 180° rule pushed to maximum. Movement leaves trails. The image breathes with motion.", insert: 'heavy cinematic motion blur, long shutter, movement streaks', subOptions: [{ name: 'Natural 180°', insert: 'natural 180-degree shutter motion blur, cinematic' }, { name: 'Extended blur', insert: 'extended shutter motion blur, heavy trailing smear' }, { name: 'Blur on action', insert: 'motion blur specifically on fast action elements' }] },
+      { name: 'STROBE', label: 'Strobe / Staccato', effect: 'Stroboscopic effect creates choppy, stuttering motion. Disorienting, club-like, or mechanical. Time appears to skip.', insert: 'stroboscopic effect, staccato stuttering motion', subOptions: [{ name: 'Club strobe', insert: 'club-style strobe, fast staccato flicker' }, { name: 'Slow strobe', insert: 'slow strobe, deliberate frame-skip quality' }, { name: 'Action strobe', insert: 'strobe on action peak, frames frozen and skipped' }] },
+      { name: 'FLICKER', label: 'Light Flicker', effect: 'Practical light source flickers throughout — candle, fluorescent, neon. The world is lit by something unstable.', insert: 'practical light flickering throughout, unstable light source', subOptions: [{ name: 'Candle flicker', insert: 'candlelight flickering, warm unstable flame light' }, { name: 'Neon flicker', insert: 'neon sign flickering, cold stuttering glow' }, { name: 'Fluorescent flicker', insert: 'fluorescent tube flickering, clinical and unsettling' }] },
+      { name: 'GHOST', label: 'Double Exposure Ghost', effect: 'Movement creates visible double-exposure echoes. Two moments exist simultaneously in the frame — dream, memory, or fragmentation.', insert: 'double-exposure ghost, movement echo and temporal layering', subOptions: [{ name: 'Memory ghost', insert: 'memory-style double exposure, past and present overlap' }, { name: 'Action ghost', insert: 'action ghost trail, movement leaves visible echo' }] },
+      { name: 'TIMELP', label: 'Time-Lapse Feel', effect: 'Environment races while subject holds — or vice versa. Time moves at different speeds for different elements.', insert: 'time-lapse environment, subject holds while world accelerates', subOptions: [{ name: 'Sky timelapse', insert: 'time-lapse sky racing overhead, clouds accelerated' }, { name: 'City timelapse', insert: 'time-lapse city, traffic and pedestrians blurred fast' }, { name: 'Differential', insert: 'differential time, subject real-time against lapsed environment' }] },
+    ],
+  },
 };
 
 // ── Edit Prompt Director Guides ──────────────────────────────────────────────
@@ -1067,6 +1142,99 @@ export const EDIT_DIRECTOR_GUIDES: Record<string, DirectorGuide> = {
       { name: 'BOKEH', label: 'Shallow / Bokeh', effect: 'Subject isolated, background dissolves. Total visual focus on one thing.', insert: 'shallow DOF, creamy bokeh, isolated subject', subOptions: [{ name: 'f/1.4 razor', insert: 'f/1.4 razor shallow, subject only in focus' }, { name: 'f/2 creamy', insert: 'f/2 creamy bokeh, soft isolation' }, { name: 'f/2.8 portrait', insert: 'f/2.8 portrait bokeh, natural isolation' }] },
       { name: 'MED', label: 'Moderate', effect: 'Subject clear, background soft but readable. Subject and world coexist.', insert: 'moderate DOF, subject sharp, background soft', subOptions: [{ name: 'f/4 moderate', insert: 'f/4 moderate depth, context visible' }, { name: 'f/5.6 context', insert: 'f/5.6, subject and background both readable' }, { name: 'Environmental', insert: 'moderate DOF, subject and environment coexist' }] },
       { name: 'DEEP', label: 'Deep Focus', effect: 'Everything sharp. The audience can read the whole frame — foreground to background.', insert: 'deep focus, sharp throughout', subOptions: [{ name: 'f/8 deep', insert: 'f/8 deep focus, near and far both sharp' }, { name: 'f/11 landscape', insert: 'f/11 landscape deep focus' }, { name: 'Citizen Kane', insert: 'f/16+ deep focus, Citizen Kane style' }] },
+    ],
+  },
+  // ── EDIT SUBJECT DETAIL ──
+  'Skin tone & texture?': {
+    context: 'Skin tone and texture is the single most important physical anchor for AI image generation. Be specific — vague descriptions produce generic results.',
+    options: [
+      { name: 'FAIR', label: 'Fair / Porcelain', effect: 'Very light complexion — pale, cool or pink undertones. High contrast against dark environments.', insert: 'very fair porcelain complexion, pale skin', subOptions: [{ name: 'Cool porcelain', insert: 'porcelain fair skin, cool pink undertone' }, { name: 'Warm ivory', insert: 'fair ivory skin, warm peachy undertone' }, { name: 'Translucent pale', insert: 'translucent pale skin, visible beneath surface' }] },
+      { name: 'LIGHT', label: 'Light / Warm', effect: 'Light to medium skin with warm peachy or golden undertones. The most common representation in Western media.', insert: 'light warm skin tone, peachy golden undertone', subOptions: [{ name: 'Peach warm', insert: 'light peach warm skin, golden warmth' }, { name: 'Sandy beige', insert: 'light sandy beige skin tone' }, { name: 'Rose light', insert: 'light skin with rosy flush undertone' }] },
+      { name: 'MED', label: 'Medium / Olive', effect: 'Olive or golden-brown tones. Mediterranean, Latino, Middle Eastern, and South Asian representations.', insert: 'medium olive complexion, warm tan undertone', subOptions: [{ name: 'Olive golden', insert: 'olive complexion, golden warm undertone' }, { name: 'Tan bronze', insert: 'medium tan skin, bronzed warm tone' }, { name: 'Warm brown', insert: 'warm medium brown skin, even complexion' }] },
+      { name: 'DARK', label: 'Dark / Rich', effect: 'Deep brown or ebony tones. Specific, beautiful, and often incorrectly rendered by AI — be explicit.', insert: 'deep rich dark brown skin tone', subOptions: [{ name: 'Deep brown', insert: 'deep brown skin, rich warm undertone' }, { name: 'Ebony', insert: 'ebony dark skin, deep and luminous' }, { name: 'Cool dark', insert: 'deep dark skin, cool blue-black undertone' }] },
+      { name: 'WEATHERED', label: 'Weathered / Lined', effect: 'Sun-worn, aged, or lived-in skin. Visible lines, texture, and history. The opposite of cosmetic perfection.', insert: 'weathered skin, visible lines and sun-worn texture', subOptions: [{ name: 'Sun-worn', insert: 'sun-worn skin, outdoor weathered texture' }, { name: 'Deep lines', insert: 'deeply lined skin, age and experience visible' }, { name: 'Rough texture', insert: 'rough textured skin, coarse and lived-in' }] },
+      { name: 'SMOOTH', label: 'Flawless / Even', effect: 'Unblemished, perfectly even. Editorial-quality smoothness. Used when the skin itself should not carry narrative weight.', insert: 'flawless smooth skin, perfectly even complexion', subOptions: [{ name: 'Editorial smooth', insert: 'editorial-quality smooth skin, retouched evenness' }, { name: 'Glass skin', insert: 'glass skin, luminous and perfectly smooth' }, { name: 'Even matte', insert: 'even matte complexion, no visible texture' }] },
+    ],
+  },
+  'Facial hair?': {
+    context: 'Facial hair is a major visual character signal — it reads before the audience processes anything else about a face.',
+    options: [
+      { name: 'CLEAN', label: 'Clean Shaven', effect: 'No facial hair. Reads as professional, youthful, vulnerable, or conformist depending on context.', insert: 'clean shaven, no facial hair', subOptions: [{ name: 'Perfectly smooth', insert: 'perfectly clean shaven, smooth jaw' }, { name: 'Just shaved', insert: 'freshly shaved, close and clean' }] },
+      { name: 'STUBBLE', label: '3-Day Stubble', effect: 'Short shadow beard. The most cinematically neutral masculine signifier — neither clean nor committed.', insert: '3-day stubble, short beard shadow', subOptions: [{ name: 'Light shadow', insert: 'very light beard shadow, 1-2 day growth' }, { name: 'Medium stubble', insert: 'medium 3-day stubble, defined but short' }, { name: 'Heavy stubble', insert: 'heavy 5-day stubble, border of short beard' }] },
+      { name: 'SHORT', label: 'Short Neat Beard', effect: 'Trimmed, intentional beard. Groomed commitment — signals maturity, deliberateness, and control.', insert: 'short neat groomed beard, trimmed and intentional', subOptions: [{ name: 'Cropped neat', insert: 'short cropped neat beard, precisely groomed' }, { name: 'Shaped beard', insert: 'short shaped beard with defined edges' }, { name: 'Professional trim', insert: 'professional short trim beard, tailored' }] },
+      { name: 'FULL', label: 'Full Beard', effect: 'Substantial, full-coverage beard. Signals wildness, wisdom, or hidden face depending on context.', insert: 'full thick beard, substantial coverage', subOptions: [{ name: 'Bushy full', insert: 'full bushy beard, dense and wide' }, { name: 'Groomed full', insert: 'full beard, well-maintained and shaped' }, { name: 'Philosopher', insert: 'long full philosopher beard, substantial and deep' }] },
+      { name: 'GOATEE', label: 'Goatee / Mustache', effect: 'Chin beard without sides, or mustache alone. More stylized — a deliberate character choice, not default.', insert: 'goatee, chin beard without side growth', subOptions: [{ name: 'Classic goatee', insert: 'classic goatee, chin only beard' }, { name: 'Mustache only', insert: 'mustache only, no chin beard' }, { name: 'Van Dyke', insert: 'Van Dyke style, pointed goatee with mustache' }] },
+      { name: 'UNKEMPT', label: 'Long / Unkempt', effect: 'Untended, wild, or long beard. Signals disconnection from social norms — survivalist, artistic, or broken.', insert: 'long unkempt beard, untended and wild', subOptions: [{ name: 'Wild long', insert: 'long wild beard, unkempt and free' }, { name: 'Survival beard', insert: 'survivalist long beard, heavily grown' }, { name: 'Artist beard', insert: 'long artist beard, deliberate and expressive' }] },
+    ],
+  },
+  'Accessories & details?': {
+    context: 'Accessories complete a character. They are chosen details — each one is a statement about who this person is or wants to be seen as.',
+    options: [
+      { name: 'NONE', label: 'No Accessories', effect: 'Clean, unadorned. The face and clothing carry everything. Nothing extra distracts or signals.', insert: 'no accessories, clean unadorned look', subOptions: [{ name: 'Pure minimal', insert: 'no jewelry, no glasses, no accessories whatsoever' }, { name: 'Stripped back', insert: 'deliberately stripped of all accessories, raw simplicity' }] },
+      { name: 'GLASS', label: 'Eyeglasses', effect: 'Glasses change a face entirely. They signal intelligence, age, or affectation — and the style says everything about which.', insert: 'wearing eyeglasses', subOptions: [{ name: 'Round wire frames', insert: 'round wire-frame glasses, intellectual aesthetic' }, { name: 'Thick horn-rim', insert: 'thick horn-rimmed glasses, bold retro statement' }, { name: 'Rimless', insert: 'rimless glasses, minimal and refined' }, { name: 'Vintage tortoiseshell', insert: 'vintage tortoiseshell frames, warm and classic' }] },
+      { name: 'SUNGLS', label: 'Sunglasses', effect: 'Sunglasses remove the eyes — the most expressive part of the face. Creates mystery, power, or detachment.', insert: 'wearing sunglasses, eyes obscured', subOptions: [{ name: 'Aviator', insert: 'aviator sunglasses, mirrored lenses' }, { name: 'Round retro', insert: 'round retro sunglasses, 70s aesthetic' }, { name: 'Wraparound', insert: 'wraparound sporty sunglasses' }, { name: 'Oversized fashion', insert: 'oversized fashion sunglasses, editorial statement' }] },
+      { name: 'JEWEL', label: 'Jewelry', effect: "Jewelry signals wealth, culture, sentiment, or fashion depending on what it is and how it's worn. Each piece tells a story.", insert: 'visible jewelry', subOptions: [{ name: 'Thin gold chain', insert: 'thin gold chain necklace, minimal and warm' }, { name: 'Statement necklace', insert: 'bold statement necklace, focal point' }, { name: 'Stud earrings', insert: 'simple stud earrings, understated' }, { name: 'Hoop earrings', insert: 'hoop earrings, confident and expressive' }, { name: 'Rings on fingers', insert: 'rings on fingers, multiple or singular' }] },
+      { name: 'WATCH', label: 'Wristwatch', effect: 'A watch is the most legible status symbol a wrist can carry — and its style is a complete character brief in itself.', insert: 'wristwatch visible on wrist', subOptions: [{ name: 'Luxury dress watch', insert: 'luxury dress watch, gold or platinum, thin profile' }, { name: 'Sports chronograph', insert: 'sports chronograph watch, thick and technical' }, { name: 'Vintage field watch', insert: 'vintage field watch, canvas strap, worn face' }, { name: 'Digital utility', insert: 'simple digital utility watch, functional not fashion' }] },
+      { name: 'HAT', label: 'Hat / Cap', effect: 'Hats frame the face and signal era, subculture, or status. The choice of hat is a complete character statement.', insert: 'wearing hat or cap', subOptions: [{ name: 'Baseball cap', insert: 'baseball cap, forward-facing, casual' }, { name: 'Beanie', insert: 'knit beanie, pulled down, casual warmth' }, { name: 'Wide-brim hat', insert: 'wide-brim hat, dramatic and face-framing' }, { name: 'Bucket hat', insert: 'bucket hat, contemporary street aesthetic' }] },
+    ],
+  },
+  // ── EDIT ACTION DETAIL ──
+  'Pose energy?': {
+    context: 'Pose energy is the dynamic quality of the body in space — the physical tension, direction, and visual weight of how the subject holds themselves.',
+    options: [
+      { name: 'DYNAMIC', label: 'Dynamic / Explosive', effect: 'Diagonal lines, implied momentum. The body looks like it is about to move or just stopped. High energy, high tension.', insert: 'dynamic diagonal pose, explosive implied energy', subOptions: [{ name: 'Forward diagonal', insert: 'forward diagonal body line, energy pushing forward' }, { name: 'Twisted dynamic', insert: 'twisted dynamic pose, coiled explosive energy' }, { name: 'Mid-action', insert: 'caught mid-action, frozen in high-energy movement' }] },
+      { name: 'STATIC', label: 'Composed / Geometric', effect: 'Deliberate, architectural stillness. Vertical and horizontal lines. The body is a controlled structure — formal and intentional.', insert: 'composed geometric stillness, deliberate controlled pose', subOptions: [{ name: 'Vertical still', insert: 'perfectly vertical posture, architectural stillness' }, { name: 'Symmetrical', insert: 'symmetrical composed pose, balanced and formal' }, { name: 'Statue-still', insert: 'statue-like stillness, body as controlled structure' }] },
+      { name: 'FLOW', label: 'Flowing / S-Curve', effect: 'The body forms an S-curve — weight shifted, hip out, soft. Classic beauty pose. Organic and graceful.', insert: 'flowing S-curve body line, weight shifted, organic grace', subOptions: [{ name: 'Hip shift', insert: 'hip shifted S-curve, classical flowing pose' }, { name: 'Dancer S-curve', insert: 'dancer S-curve line, elegant weight transfer' }, { name: 'Relaxed flow', insert: 'relaxed flowing body line, casual organic S-curve' }] },
+      { name: 'CONTORT', label: 'Contrapposto / Twisted', effect: 'Body rotated so shoulders and hips face different directions. Classical sculpture technique — adds depth and visual interest.', insert: 'twisted contrapposto, shoulders and hips offset, sculptural angles', subOptions: [{ name: 'Classic contrapposto', insert: 'classical contrapposto, weight on one leg, offset torso' }, { name: 'Over-shoulder', insert: 'body facing away, face turning over shoulder, twisted reveal' }, { name: 'Deep twist', insert: 'deep body twist, maximum shoulder-hip offset' }] },
+      { name: 'CASUAL', label: 'Casual / Unposed', effect: 'Effortlessly natural — not performing for the camera. The most difficult thing to achieve intentionally.', insert: 'casual unposed energy, effortless natural stance', subOptions: [{ name: 'Candid feel', insert: 'candid unposed feel, caught not posed' }, { name: 'Leaning casual', insert: 'casually leaning, weight on one side, relaxed' }, { name: 'Mid-thought', insert: 'caught mid-thought, natural and unguarded' }] },
+      { name: 'POWER', label: 'Power Stance', effect: 'Wide base, weight centered or forward. Occupies maximum space. Authority, dominance, or confrontation.', insert: 'power stance, wide base, commanding presence and authority', subOptions: [{ name: 'Wide stance', insert: 'wide-leg power stance, grounded and dominant' }, { name: 'Arms crossed power', insert: 'arms crossed, wide stance, controlled authority' }, { name: 'Forward lean', insert: 'forward weight lean, physical presence filling space' }] },
+    ],
+  },
+  'Makeup & grooming?': {
+    context: "Makeup and grooming signal how much the subject is performing their appearance — and for whom.",
+    options: [
+      { name: 'BARE', label: 'No Makeup / Bare', effect: 'Completely natural. Raw and unperformed. The face without artifice — either vulnerable or powerfully direct.', insert: 'no makeup, completely bare natural face', subOptions: [{ name: 'Raw natural', insert: 'no makeup, raw natural skin, zero product' }, { name: 'Fresh bare', insert: 'fresh-faced bare, clean and unadorned' }] },
+      { name: 'NATURAL', label: 'Natural / Minimal', effect: 'Makeup that looks like no makeup. Enhances without announcing itself. The professional standard of appearing "naturally beautiful."', insert: 'minimal natural makeup, enhanced but invisible', subOptions: [{ name: 'No-makeup makeup', insert: 'no-makeup makeup look, subtle enhancement' }, { name: 'Tinted moisturizer', insert: 'light tinted moisturizer, even and fresh' }, { name: 'Mascara only', insert: 'mascara only, eyes opened, otherwise bare' }] },
+      { name: 'POLISHED', label: 'Polished / Full', effect: 'Complete, flawless application. Foundation, contour, highlight — the full editorial standard. Beautiful and deliberate.', insert: 'full polished makeup, beauty editorial standard', subOptions: [{ name: 'Full beauty', insert: 'full beauty makeup, foundation to highlight, flawless' }, { name: 'Contoured', insert: 'contoured and highlighted makeup, structured face' }, { name: 'Portrait ready', insert: 'portrait-ready makeup, perfectly executed' }] },
+      { name: 'BOLD', label: 'Bold / Editorial', effect: 'Strong color choices, architectural application. Makeup as visual art — the face as canvas.', insert: 'bold editorial makeup, strong statement colour and form', subOptions: [{ name: 'Red lip', insert: 'bold red lip, classic and powerful' }, { name: 'Graphic eye', insert: 'graphic editorial eye makeup, architectural' }, { name: 'Color block', insert: 'color-block editorial makeup, avant-garde' }] },
+      { name: 'SMOKY', label: 'Smoky Eye', effect: 'Dark, blended eye makeup. Draws focus entirely to the eyes — seductive, intense, or brooding depending on context.', insert: 'smoky eye makeup, dark blended, intense eye focus', subOptions: [{ name: 'Classic smoky', insert: 'classic black smoky eye, blended and deep' }, { name: 'Brown smoky', insert: 'warm brown smoky eye, softer and rich' }, { name: 'Color smoky', insert: 'colored smoky eye, non-neutral palette' }] },
+      { name: 'WORN', label: 'Smudged / Worn', effect: 'Makeup that has shifted, smeared, or degraded. Time has passed. Crying, heat, or the end of a long night.', insert: 'smudged worn makeup, end-of-day or post-crying deterioration', subOptions: [{ name: 'Tear-smudged', insert: 'mascara smudged from crying, emotional deterioration' }, { name: 'End of night', insert: 'end-of-night worn makeup, shifted and lived-in' }, { name: 'Heat smear', insert: 'heat-blurred makeup, sweat-smeared application' }] },
+    ],
+  },
+  'Markings & skin detail?': {
+    context: 'Specific marks and skin details make AI-generated characters feel real and unique rather than generic.',
+    options: [
+      { name: 'NONE', label: 'Clean / Unmarked', effect: 'No visible marks, tattoos, or distinguishing features. Clean slate — the character is defined by other means.', insert: 'no visible marks or tattoos, clean skin', subOptions: [{ name: 'Unblemished', insert: 'completely unblemished, no marks or scars' }, { name: 'Editorial clean', insert: 'editorially clean skin, no distinguishing marks' }] },
+      { name: 'TATTOO', label: 'Tattoo(s)', effect: 'Tattoos are permanent stories on skin. Their location, style, and content all signal character history and values.', insert: 'visible tattoo on skin', subOptions: [{ name: 'Neck tattoo', insert: 'tattoo on neck, bold placement' }, { name: 'Hand/knuckle', insert: 'knuckle or hand tattoos, visible and deliberate' }, { name: 'Arm sleeve', insert: 'arm sleeve tattoo, extensive coverage' }, { name: 'Minimal single', insert: 'single small minimal tattoo, understated' }, { name: 'Chest piece', insert: 'chest tattoo visible at neckline' }] },
+      { name: 'SCAR', label: 'Scar / Wound', effect: 'Scars carry backstory. Their location suggests what happened to this person — before the scene began.', insert: 'visible scar on skin, healed or fresh wound', subOptions: [{ name: 'Facial scar', insert: 'facial scar, prominent and character-defining' }, { name: 'Hand scar', insert: 'hand or knuckle scar, from past use' }, { name: 'Old healed', insert: 'old healed scar, silver-white faded mark' }, { name: 'Fresh wound', insert: 'fresh wound, recent and unhealed' }] },
+      { name: 'FRECK', label: 'Freckles', effect: 'Freckles are natural and photogenic. They add specificity and warmth — a face that has been in sunlight.', insert: 'natural freckles across skin', subOptions: [{ name: 'Light face freckles', insert: 'light freckles across nose and cheeks' }, { name: 'Heavy freckles', insert: 'heavy freckle coverage, dense natural freckling' }, { name: 'Sun freckles', insert: 'sun-kiss freckles, warm and scattered' }] },
+      { name: 'PORES', label: 'Hyperreal Skin Texture', effect: 'Visible pores, fine hairs, and micro-texture. Forces the AI into maximum photorealism on the skin surface.', insert: 'hyperrealistic skin texture, pores and microhair visible', subOptions: [{ name: 'Pore detail', insert: 'visible skin pores, ultra high-resolution skin detail' }, { name: 'Skin hair', insert: 'fine skin hair and texture visible, hyperrealistic' }, { name: 'Subsurface', insert: 'subsurface skin scatter, realistic light through skin' }] },
+      { name: 'SWEAT', label: 'Sweat / Moisture', effect: 'Moisture on skin signals heat, effort, or tension. It makes still images feel like they have a temperature.', insert: 'visible sweat on skin, moisture and physical sheen', subOptions: [{ name: 'Light glow', insert: 'light dewy skin glow, subtle moisture' }, { name: 'Active sweat', insert: 'active sweat, droplets and sheen on skin' }, { name: 'Soaked', insert: 'heavily soaked, sweat-drenched skin and clothing' }] },
+    ],
+  },
+  // ── EDIT ENVIRONMENT & COMPOSITION ──
+  'Composition device?': {
+    context: 'Composition device describes the structural choice used to frame or direct the eye within the image — beyond simply placing the subject.',
+    options: [
+      { name: 'CLEAN', label: 'Direct / Clean', effect: 'Subject presented without compositional tricks. The subject simply is — no framing device, no lead-in, no architecture around them.', insert: 'clean direct framing, subject unobstructed', subOptions: [{ name: 'Simple direct', insert: 'simple direct composition, no framing device' }, { name: 'Isolation clean', insert: 'subject isolated, clean empty frame around them' }] },
+      { name: 'FFRAME', label: 'Frame Within Frame', effect: "A foreground element creates a second frame around the subject — a doorway, window, branches, hands. The audience looks through something to see them.", insert: 'frame within frame, foreground element framing subject', subOptions: [{ name: 'Doorway frame', insert: 'doorway framing subject in background' }, { name: 'Window frame', insert: 'window framing subject, seen through glass' }, { name: 'Archway frame', insert: 'architectural archway framing subject' }, { name: 'Foliage frame', insert: 'foliage and branches framing subject through gap' }] },
+      { name: 'LEADIN', label: 'Leading Lines', effect: 'Strong lines in the environment direct the eye to the subject — roads, corridors, fences, shadows. The world points at them.', insert: 'strong leading lines in composition directing eye to subject', subOptions: [{ name: 'Road perspective', insert: 'vanishing-point road leading to distant subject' }, { name: 'Corridor lines', insert: 'corridor perspective lines directing to subject' }, { name: 'Shadow lines', insert: 'shadow leading lines, environmental diagonal to subject' }] },
+      { name: 'TUNNEL', label: 'Tunnel / Vortex', effect: 'Subject framed at the end of a deep receding tunnel. Creates depth, isolation, and a sense of being at the end of something.', insert: 'tunnel perspective, subject at vanishing point of deep recession', subOptions: [{ name: 'Urban tunnel', insert: 'urban tunnel perspective, subject at far end' }, { name: 'Forest tunnel', insert: 'forest canopy tunnel, natural recession to subject' }, { name: 'Alley vortex', insert: 'alley or corridor vortex framing, deep recession' }] },
+      { name: 'MIRROR', label: 'Mirror / Reflection', effect: "Subject seen in reflection — mirror, water, glass, or polished surface. Creates duality, narcissism, or self-confrontation.", insert: 'subject in reflection, mirror or reflective surface as compositional device', subOptions: [{ name: 'Mirror portrait', insert: 'subject in mirror, both subject and reflection visible' }, { name: 'Water reflection', insert: 'subject reflected in still water below' }, { name: 'Glass reflection', insert: 'subject partially in glass reflection, layered' }] },
+      { name: 'SHADOW', label: 'Shadow as Design', effect: 'A strong graphic shadow is a deliberate compositional element — cast by or onto the subject, or dominating the frame independent of the subject.', insert: 'strong shadow as graphic compositional element', subOptions: [{ name: 'Shadow on subject', insert: 'shadow pattern cast across subject, graphic geometry' }, { name: "Subject's shadow", insert: "subject's strong shadow on wall or floor, graphic extension" }, { name: 'Split shadow', insert: 'shadow splitting frame, half subject in shadow half light' }] },
+    ],
+  },
+  // ── EDIT ART STYLE EXTENSION ──
+  'Render / art style?': {
+    context: 'Render style tells the AI what visual universe this image lives in — from photorealistic to fully illustrative. This overrides all other naturalism assumptions.',
+    options: [
+      { name: 'PHOTO', label: 'Photorealistic', effect: 'Indistinguishable from a photograph. All other options should be grounded in photographic logic.', insert: 'photorealistic, photo-real rendering, camera-accurate', subOptions: [{ name: 'High-end photo', insert: 'high-end photorealistic, commercial photography quality' }, { name: 'Documentary photo', insert: 'documentary photorealistic, candid camera quality' }] },
+      { name: 'ANIME', label: 'Anime / Manga', effect: 'Japanese animation aesthetic. Large expressive eyes, stylized hair, clean line art. Huge variance by studio — specify era and style.', insert: 'anime art style, manga-influenced illustration', subOptions: [{ name: 'Modern anime', insert: 'modern anime style, contemporary Japanese animation' }, { name: 'Classic 90s anime', insert: 'classic 1990s anime aesthetic, cel-shaded and warm' }, { name: 'Manga B&W', insert: 'manga black and white illustration, ink line art' }, { name: 'Studio Ghibli', insert: 'Studio Ghibli-adjacent style, painterly and warm anime' }] },
+      { name: 'ILLUS', label: 'Editorial Illustration', effect: 'Graphic and stylized but grounded in reality. Used in print, editorial, and high-end brand contexts.', insert: 'editorial illustration style, graphic and stylized', subOptions: [{ name: 'Fashion illustration', insert: 'fashion editorial illustration, elongated stylized' }, { name: 'Flat graphic', insert: 'flat graphic illustration style, minimal and clean' }, { name: 'Ink wash', insert: 'ink and wash illustration, expressive marks' }] },
+      { name: 'COMIC', label: 'Graphic Novel / Comic', effect: 'Bold outlines, halftone patterns, dynamic panel energy. Recognizable visual language of Western comics.', insert: 'graphic novel aesthetic, bold comic-book art style', subOptions: [{ name: 'Marvel/DC style', insert: 'superhero comic style, bold inks and dynamic' }, { name: 'Indie comic', insert: 'indie graphic novel style, expressive and personal' }, { name: 'Noir comic', insert: 'noir comic style, high contrast black and white panels' }] },
+      { name: 'CGI', label: '3D CGI Render', effect: 'Digital sculpt quality — Pixar, game render, or photoreal CG. Clearly digital but intentionally so.', insert: '3D CGI render aesthetic, digital sculpt quality', subOptions: [{ name: 'Pixar-style CGI', insert: 'Pixar-quality 3D CGI render, expressive stylized' }, { name: 'Game render', insert: 'video game cinematic render, high-fidelity 3D' }, { name: 'Photoreal CGI', insert: 'photoreal CGI render, ILM or Weta quality' }] },
+      { name: 'OIL', label: 'Oil Painting', effect: 'Classical or contemporary oil painting. Brushstrokes, impasto, and paint texture visible. The prestige art register.', insert: 'oil painting aesthetic, classical painted quality, visible brushwork', subOptions: [{ name: 'Classical portrait', insert: 'classical oil portrait, Old Master technique' }, { name: 'Contemporary oil', insert: 'contemporary oil painting, expressive modern' }, { name: 'Impasto', insert: 'impasto oil technique, thick textured paint visible' }] },
+      { name: 'SKETCH', label: 'Sketch / Pencil', effect: 'Hand-drawn quality — pencil, charcoal, or ink line art. Unfinished and human. The impression of the thing rather than the thing itself.', insert: 'pencil or charcoal sketch, hand-drawn line quality', subOptions: [{ name: 'Pencil sketch', insert: 'pencil sketch quality, graphite line art' }, { name: 'Charcoal', insert: 'charcoal sketch, bold dark tonal marks' }, { name: 'Ink line art', insert: 'ink line art, precise pen work' }] },
     ],
   },
 };
