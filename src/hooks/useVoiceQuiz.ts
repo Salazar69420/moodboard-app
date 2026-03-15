@@ -696,47 +696,30 @@ export function useVoiceQuiz() {
 
   // ─── Confirm and write fields ───────────────────────────────────────────────
 
-  // closeQuiz: end session at any point — write whatever has been captured so far to the node.
-  // Any field that was answered gets written; unanswered fields are left untouched.
-  const closeQuiz = useCallback(async () => {
-    const state = useVoiceQuizStore.getState();
-    const boardStore = useBoardStore.getState();
-
-    const activeFields = state.filledFields.filter(f => !f.wasRejected);
-
-    if (state.noteId && activeFields.length > 0) {
-      // Persist to in-memory + reactive store
-      _savedFields.set(state.noteId, [...state.filledFields]);
-      useSavedFieldsStore.getState().save(state.noteId, [...state.filledFields]);
-
-      // Write partial results to the note so no work is lost
-      if (state.singleFieldMode) {
-        // Single-field re-record: merge with existing saved fields
-        const prevFields = _savedFields.get(state.noteId) || [];
-        const mergedFields = [
-          ...prevFields.filter(f => f.fieldId !== state.targetFieldId),
-          ...activeFields,
-        ];
-        const finalText = mergedFields.map(f => f.value).join('. ');
-        if (state.noteType === 'category') {
-          await boardStore.updateCategoryNote(state.noteId, { text: finalText });
-        } else if (state.noteType === 'edit') {
-          await boardStore.updateEditNote(state.noteId, { text: finalText });
-        }
-        _savedFields.set(state.noteId, mergedFields);
-        useSavedFieldsStore.getState().save(state.noteId, mergedFields);
-      } else {
-        const noteText = activeFields.map(f => f.value).join('. ');
-        if (state.noteType === 'category') {
-          await boardStore.updateCategoryNote(state.noteId, { text: noteText });
-        } else if (state.noteType === 'edit') {
-          await boardStore.updateEditNote(state.noteId, { text: noteText });
-        }
-      }
-    }
-
+  // closeQuiz: hard discard — stop everything and reset. Used by backdrop, X, and Discard button.
+  const closeQuiz = useCallback(() => {
     stopAllMedia();
     useVoiceQuizStore.getState()._reset();
+  }, []);
+
+  // endSession: called by "End Session" button mid-quiz.
+  // If fields have been captured → stop mic and go to the review screen (confirming).
+  // The director can then review, edit, and write to node exactly like a normal completion.
+  // If nothing captured yet → just close.
+  const endSession = useCallback(() => {
+    const state = useVoiceQuizStore.getState();
+    const hasCaptured = state.filledFields.filter(f => !f.wasRejected).length > 0;
+
+    // Stop mic/recorder so the UI is no longer actively listening
+    stopAllMedia();
+
+    if (hasCaptured) {
+      // Go to review — director sees cards, confirms inferred fields, then writes
+      useVoiceQuizStore.getState()._set({ status: 'confirming', liveTranscript: '' });
+    } else {
+      // Nothing captured — just close
+      useVoiceQuizStore.getState()._reset();
+    }
   }, []);
 
   const confirmFields = useCallback(async (confirmedFields: FilledField[]) => {
@@ -837,6 +820,7 @@ export function useVoiceQuiz() {
     ...store,
     openQuiz,
     closeQuiz,
+    endSession,
     confirmFields,
     editField,
     rejectField,

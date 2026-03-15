@@ -1026,7 +1026,7 @@ function Sheet({ quiz }: { quiz: ReturnType<typeof useVoiceQuiz> }) {
 
                 {!isConfirming && (
                   <button
-                    onClick={quiz.closeQuiz}
+                    onClick={quiz.endSession}
                     style={{
                       background: C.red(0.06), border: `1px solid ${C.red(0.14)}`,
                       color: C.red(0.65), borderRadius: 12,
@@ -1043,7 +1043,7 @@ function Sheet({ quiz }: { quiz: ReturnType<typeof useVoiceQuiz> }) {
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                       <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                     </svg>
-                    {quiz.filledFields.filter(f => !f.wasRejected).length > 0 ? 'Save & Exit' : 'Cancel'}
+                    {quiz.filledFields.filter(f => !f.wasRejected).length > 0 ? 'Review & Save' : 'Cancel'}
                   </button>
                 )}
               </div>
