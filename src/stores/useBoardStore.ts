@@ -500,7 +500,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
                 createdAt: node.createdAt,
             };
             const prevHistory = node.history || [];
-            const newHistory = [currentVersion, ...prevHistory].slice(0, 3);
+            const newHistory = [currentVersion, ...prevHistory].slice(0, 20);
 
             const updated = {
                 ...node,

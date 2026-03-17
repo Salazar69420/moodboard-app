@@ -1,9 +1,24 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import type { GodModeNode } from '../../types';
+import type { GodModeNode, GodModeRule } from '../../types';
 import { useBoardStore } from '../../stores/useBoardStore';
 import { useImageStore } from '../../stores/useImageStore';
 import { useProjectStore } from '../../stores/useProjectStore';
 import { useUIStore } from '../../stores/useUIStore';
+
+function nanoid6() {
+    return Math.random().toString(36).slice(2, 8);
+}
+
+function parseRulesFromText(text: string): GodModeRule[] {
+    return text.split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(line => ({ id: nanoid6(), text: line, enabled: true }));
+}
+
+function syncTextFromRules(rules: GodModeRule[]): string {
+    return rules.filter(r => r.enabled).map(r => r.text.trim()).filter(Boolean).join('\n');
+}
 
 const DRAG_THRESHOLD = 4;
 const IS_TOUCH = typeof window !== 'undefined' && navigator.maxTouchPoints > 0;
@@ -30,28 +45,38 @@ export function GodModeNodeComponent({ node, zoomScale = 1 }: Props) {
 
     const [isHovered, setIsHovered] = useState(false);
     const [hoverHandle, setHoverHandle] = useState(false);
-    const [isEditing, setIsEditing] = useState(false);
     const [isMinimized, setIsMinimized] = useState(node.isMinimized);
     const [animatingMinimize, setAnimatingMinimize] = useState(false);
     const [mounted, setMounted] = useState(false);
-    const [localText, setLocalText] = useState(node.text);
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [localTitle, setLocalTitle] = useState(node.title);
-    const [mentionOpen, setMentionOpen] = useState(false);
-    const [mentionQuery, setMentionQuery] = useState('');
-    const [mentionIdx, setMentionIdx] = useState(0);
-    const [mentionStart, setMentionStart] = useState(0);
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
     const titleRef = useRef<HTMLInputElement>(null);
+
+    // Rules list state (migrates from text if no rules stored)
+    const [rules, setRules] = useState<GodModeRule[]>(() => {
+        if (node.rules && node.rules.length > 0) return node.rules;
+        if (node.text.trim()) return parseRulesFromText(node.text);
+        return [];
+    });
+
+    // Sync rules with store whenever they change
+    const saveRules = useCallback((newRules: GodModeRule[]) => {
+        setRules(newRules);
+        const syncedText = syncTextFromRules(newRules);
+        updateGodModeNode(node.id, { rules: newRules, text: syncedText });
+    }, [node.id, updateGodModeNode]);
 
     useEffect(() => {
         const id = requestAnimationFrame(() => setMounted(true));
         return () => cancelAnimationFrame(id);
     }, []);
 
+    // Sync rules if node.rules changes externally (e.g. collaboration)
     useEffect(() => {
-        if (!isEditing) setLocalText(node.text);
-    }, [node.text, isEditing]);
+        if (node.rules && node.rules.length > 0) {
+            setRules(node.rules);
+        }
+    }, [node.rules]);
 
     useEffect(() => {
         if (!isEditingTitle) setLocalTitle(node.title);
@@ -123,32 +148,29 @@ export function GodModeNodeComponent({ node, zoomScale = 1 }: Props) {
         updateGodModeNode(node.id, { isEnabled: !node.isEnabled });
     }, [node.id, node.isEnabled, updateGodModeNode]);
 
-    // @mention helpers
-    const filteredMentions = connectedImages.filter(img => {
-        const label = img.label || img.filename.replace(/\.[^.]+$/, '');
-        const slug = label.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-        return slug.toLowerCase().includes(mentionQuery);
-    });
-
-    const insertMention = useCallback((img: { label?: string; filename: string; id: string }) => {
-        if (!textareaRef.current) return;
-        const label = img.label || img.filename.replace(/\.[^.]+$/, '');
-        const slug = label.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-        const before = localText.substring(0, mentionStart);
-        const after = localText.substring(textareaRef.current.selectionStart);
-        const newVal = `${before}@${slug} ${after}`;
-        setLocalText(newVal);
-        updateGodModeNode(node.id, { text: newVal });
-        setMentionOpen(false);
-        textareaRef.current.focus();
-        const cursorPos = mentionStart + slug.length + 2; // @slug + space
+    const addRule = useCallback(() => {
+        const newRule: GodModeRule = { id: nanoid6(), text: '', enabled: true };
+        const newRules = [...rules, newRule];
+        saveRules(newRules);
+        // Focus the new rule input after render
         setTimeout(() => {
-            if (textareaRef.current) {
-                textareaRef.current.selectionStart = cursorPos;
-                textareaRef.current.selectionEnd = cursorPos;
-            }
-        }, 0);
-    }, [localText, mentionStart, node.id, updateGodModeNode]);
+            const inputs = document.querySelectorAll(`[data-god-rule="${node.id}"]`);
+            const last = inputs[inputs.length - 1] as HTMLInputElement | null;
+            last?.focus();
+        }, 50);
+    }, [rules, saveRules, node.id]);
+
+    const updateRule = useCallback((ruleId: string, text: string) => {
+        saveRules(rules.map(r => r.id === ruleId ? { ...r, text } : r));
+    }, [rules, saveRules]);
+
+    const toggleRule = useCallback((ruleId: string) => {
+        saveRules(rules.map(r => r.id === ruleId ? { ...r, enabled: !r.enabled } : r));
+    }, [rules, saveRules]);
+
+    const deleteRule = useCallback((ruleId: string) => {
+        saveRules(rules.filter(r => r.id !== ruleId));
+    }, [rules, saveRules]);
 
     const activeColor = node.isEnabled ? GOD_COLOR : '#666';
     const activeGlow = node.isEnabled ? GOD_GLOW : 'rgba(100,100,100,';
@@ -160,7 +182,7 @@ export function GodModeNodeComponent({ node, zoomScale = 1 }: Props) {
                 left: node.x,
                 top: node.y,
                 width: isMinimized ? 'auto' : node.width,
-                zIndex: isEditing ? 60 : isHovered ? 50 : isMinimized ? 10 : 30,
+                zIndex: isHovered ? 50 : isMinimized ? 10 : 30,
                 opacity: mounted ? 1 : 0,
                 transform: mounted ? 'scale(1) translateZ(0)' : 'scale(0.88) translateZ(0)',
                 transition: 'opacity 350ms cubic-bezier(0.22, 1, 0.36, 1), transform 400ms cubic-bezier(0.22, 1, 0.36, 1)',
@@ -434,229 +456,243 @@ export function GodModeNodeComponent({ node, zoomScale = 1 }: Props) {
                 >
                     {/* Status bar */}
                     <div style={{
-                        padding: '6px 12px 4px',
+                        padding: '5px 12px 4px',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 6,
+                        justifyContent: 'space-between',
                     }}>
-                        <div style={{
-                            width: 6, height: 6, borderRadius: '50%',
-                            background: node.isEnabled ? activeColor : '#444',
-                            boxShadow: node.isEnabled ? `0 0 8px ${activeColor}` : 'none',
-                            transition: 'all 0.25s ease',
-                            flexShrink: 0,
-                        }} />
-                        <span style={{
-                            fontSize: 9,
-                            fontFamily: "'JetBrains Mono', monospace",
-                            color: node.isEnabled ? `${activeGlow}0.6)` : 'rgba(255,255,255,0.2)',
-                            letterSpacing: '0.06em',
-                            textTransform: 'uppercase',
-                            transition: 'color 0.25s ease',
-                        }}>
-                            {node.isEnabled ? 'Active — injected into all prompts' : 'Disabled — not affecting prompts'}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <div style={{
+                                width: 5, height: 5, borderRadius: '50%',
+                                background: node.isEnabled ? activeColor : '#444',
+                                boxShadow: node.isEnabled ? `0 0 6px ${activeColor}` : 'none',
+                                transition: 'all 0.25s ease',
+                                flexShrink: 0,
+                            }} />
+                            <span style={{
+                                fontSize: 8,
+                                fontFamily: "'JetBrains Mono', monospace",
+                                color: node.isEnabled ? `${activeGlow}0.55)` : 'rgba(255,255,255,0.18)',
+                                letterSpacing: '0.06em',
+                                textTransform: 'uppercase',
+                                transition: 'color 0.25s ease',
+                            }}>
+                                {node.isEnabled ? 'Active' : 'Disabled'}
+                            </span>
+                            <span style={{
+                                fontSize: 8,
+                                fontFamily: "'JetBrains Mono', monospace",
+                                color: 'rgba(255,255,255,0.2)',
+                            }}>
+                                · {rules.filter(r => r.enabled).length}/{rules.length} rules active
+                            </span>
+                        </div>
                     </div>
 
-                    <textarea
-                        ref={textareaRef}
+                    {/* Rules list */}
+                    <div
+                        data-no-drag="true"
+                        onPointerDown={e => e.stopPropagation()}
+                        onMouseDown={e => e.stopPropagation()}
                         style={{
-                            width: '100%',
-                            background: 'transparent',
-                            resize: 'none',
-                            outline: 'none',
-                            border: 'none',
-                            fontFamily: "'Inter', system-ui, sans-serif",
-                            fontSize: 12,
-                            color: node.isEnabled ? 'rgba(255,255,255,0.78)' : 'rgba(255,255,255,0.35)',
-                            padding: '6px 12px 12px',
-                            lineHeight: '1.6',
-                            caretColor: activeColor,
-                            minHeight: 80,
-                            height: 120,
-                            cursor: isEditing ? 'text' : 'inherit',
+                            padding: '4px 10px 6px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 3,
+                            maxHeight: 240,
                             overflowY: 'auto',
-                            letterSpacing: '0.01em',
-                            transition: 'color 0.25s ease',
                         }}
-                        placeholder={node.isEnabled
-                            ? "Instructions always applied to every prompt…\n\nUse @nodename to reference connected images, e.g.:\n\"Match the grading from @colorsheet\""
-                            : "God Mode disabled — enable to inject into prompts…"
-                        }
-                        value={localText}
-                        onFocus={() => setIsEditing(true)}
-                        onBlur={() => {
-                            setTimeout(() => {
-                                setIsEditing(false);
-                                setMentionOpen(false);
-                                updateGodModeNode(node.id, { text: localText });
-                            }, 150);
-                        }}
-                        onChange={(e) => {
-                            const val = e.target.value;
-                            setLocalText(val);
-                            updateGodModeNode(node.id, { text: val });
+                    >
+                        {rules.length === 0 && (
+                            <div style={{
+                                padding: '12px 0',
+                                textAlign: 'center',
+                                fontSize: 10,
+                                fontFamily: "'Inter', system-ui, sans-serif",
+                                color: 'rgba(255,255,255,0.2)',
+                            }}>
+                                No rules yet — click + to add one
+                            </div>
+                        )}
+                        {rules.map((rule, idx) => (
+                            <div
+                                key={rule.id}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    padding: '3px 4px',
+                                    borderRadius: 6,
+                                    background: rule.enabled ? `${activeGlow}0.05)` : 'rgba(255,255,255,0.02)',
+                                    border: `1px solid ${rule.enabled ? `${activeGlow}0.12)` : 'rgba(255,255,255,0.04)'}`,
+                                    transition: 'background 0.15s ease, border-color 0.15s ease',
+                                }}
+                            >
+                                {/* Rule number */}
+                                <span style={{
+                                    fontSize: 8,
+                                    fontFamily: "'JetBrains Mono', monospace",
+                                    color: rule.enabled ? `${activeGlow}0.4)` : '#333',
+                                    minWidth: 14,
+                                    textAlign: 'right',
+                                    flexShrink: 0,
+                                    transition: 'color 0.15s ease',
+                                }}>
+                                    {String(idx + 1).padStart(2, '0')}
+                                </span>
 
-                            // @mention detection
-                            const pos = e.target.selectionStart;
-                            const textBefore = val.substring(0, pos);
-                            const atIdx = textBefore.lastIndexOf('@');
-                            if (atIdx >= 0 && (atIdx === 0 || /\s/.test(textBefore[atIdx - 1]))) {
-                                const query = textBefore.substring(atIdx + 1);
-                                if (!query.includes(' ')) {
-                                    setMentionOpen(true);
-                                    setMentionQuery(query.toLowerCase());
-                                    setMentionStart(atIdx);
-                                    setMentionIdx(0);
-                                    return;
-                                }
-                            }
-                            setMentionOpen(false);
-                        }}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => {
-                            if (mentionOpen && filteredMentions.length > 0) {
-                                if (e.key === 'ArrowDown') {
-                                    e.preventDefault();
-                                    setMentionIdx(i => Math.min(i + 1, filteredMentions.length - 1));
-                                    return;
-                                }
-                                if (e.key === 'ArrowUp') {
-                                    e.preventDefault();
-                                    setMentionIdx(i => Math.max(i - 1, 0));
-                                    return;
-                                }
-                                if (e.key === 'Enter' || e.key === 'Tab') {
-                                    e.preventDefault();
-                                    insertMention(filteredMentions[mentionIdx]);
-                                    return;
-                                }
-                                if (e.key === 'Escape') {
-                                    setMentionOpen(false);
-                                    return;
-                                }
-                            }
-                            if (e.key === 'Escape') (e.target as HTMLTextAreaElement).blur();
-                        }}
-                    />
-
-                    {/* @mention dropdown */}
-                    {mentionOpen && filteredMentions.length > 0 && (
-                        <div style={{
-                            position: 'absolute', bottom: '100%', left: 11,
-                            background: 'rgba(10,11,20,0.97)',
-                            backdropFilter: 'blur(20px) saturate(180%)',
-                            border: '1px solid rgba(255,255,255,0.1)',
-                            borderRadius: 10, padding: 4, zIndex: 100,
-                            boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
-                            maxHeight: 150, overflowY: 'auto', minWidth: 150,
-                        }}>
-                            {filteredMentions.map((img, idx) => {
-                                const slug = (img.label || img.filename.replace(/\.[^.]+$/, '')).replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-                                return (
-                                    <div
-                                        key={img.id}
-                                        style={{
-                                            padding: '5px 8px', cursor: 'pointer', borderRadius: 7, fontSize: 11,
-                                            fontFamily: "'Inter', system-ui, sans-serif",
-                                            background: idx === mentionIdx ? 'rgba(255,255,255,0.08)' : 'transparent',
-                                            color: idx === mentionIdx ? '#fff' : 'rgba(255,255,255,0.5)',
-                                            transition: 'background 0.1s ease',
-                                        }}
-                                        onPointerDown={(e) => {
+                                {/* Rule text input */}
+                                <input
+                                    data-god-rule={node.id}
+                                    type="text"
+                                    value={rule.text}
+                                    onChange={e => updateRule(rule.id, e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') {
                                             e.preventDefault();
-                                            insertMention(img);
-                                        }}
-                                    >
-                                        <span style={{ color: GOD_COLOR, marginRight: 4 }}>@</span>
-                                        {slug}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-
-                    {/* Connected refs bar */}
-                    {connectedImages.length > 0 && !isMinimized && (
-                        <div
-                            onPointerDown={e => e.stopPropagation()}
-                            onMouseDown={e => e.stopPropagation()}
-                            style={{
-                                padding: '4px 12px 6px',
-                                borderTop: '1px solid rgba(255,255,255,0.05)',
-                                display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4,
-                            }}
-                        >
-                            <span style={{
-                                fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-                                color: 'rgba(255,255,255,0.2)', letterSpacing: '0.05em', flexShrink: 0,
-                            }}>refs:</span>
-                            {connectedImages.map(img => {
-                                const name = img.label || img.filename.replace(/\.[^.]+$/, '');
-                                const slug = name.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-                                const hasLabel = !!img.label;
-                                return (
-                                    <button
-                                        key={img.id}
-                                        title={hasLabel ? `Insert @${slug}` : 'Label this image to reference'}
-                                        style={{
-                                            fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-                                            color: hasLabel ? GOD_COLOR : 'rgba(255,255,255,0.25)',
-                                            background: hasLabel ? `${GOD_GLOW}0.08)` : 'rgba(255,255,255,0.03)',
-                                            border: `1px solid ${hasLabel ? `${GOD_GLOW}0.25)` : 'rgba(255,255,255,0.07)'}`,
-                                            borderRadius: 4, padding: '1px 6px',
-                                            cursor: hasLabel ? 'pointer' : 'default',
-                                            transition: 'all 0.15s ease',
-                                        }}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            if (!hasLabel || !textareaRef.current) return;
-                                            const pos = textareaRef.current.selectionStart ?? localText.length;
-                                            const insertion = `@${slug} `;
-                                            const newVal = localText.slice(0, pos) + insertion + localText.slice(pos);
-                                            setLocalText(newVal);
-                                            updateGodModeNode(node.id, { text: newVal });
-                                            textareaRef.current.focus();
+                                            addRule();
+                                        }
+                                        if (e.key === 'Backspace' && rule.text === '') {
+                                            e.preventDefault();
+                                            deleteRule(rule.id);
+                                            // Focus previous input
                                             setTimeout(() => {
-                                                if (textareaRef.current) {
-                                                    textareaRef.current.selectionStart = pos + insertion.length;
-                                                    textareaRef.current.selectionEnd = pos + insertion.length;
-                                                }
-                                            }, 0);
-                                        }}
-                                    >
-                                        @{slug}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    )}
+                                                const inputs = document.querySelectorAll(`[data-god-rule="${node.id}"]`);
+                                                const prev = inputs[Math.max(0, idx - 1)] as HTMLInputElement | null;
+                                                prev?.focus();
+                                            }, 50);
+                                        }
+                                    }}
+                                    placeholder={`Rule ${idx + 1}…`}
+                                    style={{
+                                        flex: 1,
+                                        background: 'transparent',
+                                        border: 'none',
+                                        outline: 'none',
+                                        fontSize: 11,
+                                        fontFamily: "'Inter', system-ui, sans-serif",
+                                        color: rule.enabled ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.3)',
+                                        caretColor: activeColor,
+                                        letterSpacing: '0.01em',
+                                        textDecoration: !rule.enabled ? 'line-through' : 'none',
+                                        transition: 'color 0.15s ease',
+                                        minWidth: 0,
+                                    }}
+                                />
 
-                    {/* Footer hint */}
+                                {/* Individual rule toggle */}
+                                <button
+                                    onClick={() => toggleRule(rule.id)}
+                                    title={rule.enabled ? 'Disable rule' : 'Enable rule'}
+                                    style={{
+                                        width: 22,
+                                        height: 13,
+                                        borderRadius: 6.5,
+                                        background: rule.enabled ? `${activeGlow}0.3)` : 'rgba(255,255,255,0.06)',
+                                        border: `1px solid ${rule.enabled ? `${activeGlow}0.4)` : 'rgba(255,255,255,0.1)'}`,
+                                        cursor: 'pointer',
+                                        position: 'relative',
+                                        flexShrink: 0,
+                                        transition: 'all 0.2s ease',
+                                    }}
+                                >
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: 1.5,
+                                        left: rule.enabled ? 10 : 1.5,
+                                        width: 8,
+                                        height: 8,
+                                        borderRadius: '50%',
+                                        background: rule.enabled ? activeColor : '#555',
+                                        transition: 'all 0.2s cubic-bezier(0.22, 1, 0.36, 1)',
+                                    }} />
+                                </button>
+
+                                {/* Delete rule */}
+                                <button
+                                    onClick={() => deleteRule(rule.id)}
+                                    title="Delete rule"
+                                    style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: '#444',
+                                        cursor: 'pointer',
+                                        padding: 1,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        flexShrink: 0,
+                                        transition: 'color 0.12s ease',
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#ef4444'}
+                                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#444'}
+                                >
+                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Add rule + connected refs footer */}
                     <div style={{
-                        padding: '4px 12px 8px',
-                        borderTop: `1px solid rgba(255,255,255,0.04)`,
+                        padding: '5px 10px 8px',
+                        borderTop: '1px solid rgba(255,255,255,0.05)',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 5,
-                    }}>
-                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={node.isEnabled ? activeColor : '#444'} strokeWidth="2" opacity="0.5">
-                            <circle cx="12" cy="12" r="10" />
-                            <line x1="12" y1="8" x2="12" y2="12" />
-                            <line x1="12" y1="16" x2="12.01" y2="16" />
-                        </svg>
-                        <span style={{
-                            fontSize: 9,
-                            fontFamily: "'Inter', system-ui, sans-serif",
-                            color: 'rgba(255,255,255,0.18)',
-                            letterSpacing: '0.01em',
-                        }}>
-                            {connectedImages.length > 0
-                                ? `Use @name to reference ${connectedImages.length} connected image${connectedImages.length > 1 ? 's' : ''}`
-                                : 'God Mode context is sent to every prompt generation'
-                            }
-                        </span>
+                        justifyContent: 'space-between',
+                        gap: 8,
+                    }}
+                        onPointerDown={e => e.stopPropagation()}
+                        onMouseDown={e => e.stopPropagation()}
+                    >
+                        {/* Add rule button */}
+                        <button
+                            onClick={addRule}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                background: `${activeGlow}0.08)`,
+                                border: `1px solid ${activeGlow}0.2)`,
+                                borderRadius: 5,
+                                padding: '3px 8px',
+                                cursor: 'pointer',
+                                fontSize: 9,
+                                fontFamily: "'JetBrains Mono', monospace",
+                                color: node.isEnabled ? activeColor : '#666',
+                                letterSpacing: '0.04em',
+                                transition: 'all 0.12s ease',
+                            }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${activeGlow}0.14)`; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = `${activeGlow}0.08)`; }}
+                        >
+                            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                            </svg>
+                            Add Rule
+                        </button>
+
+                        {/* Connected refs chips */}
+                        {connectedImages.length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center' }}>
+                                <span style={{ fontSize: 8, fontFamily: "'JetBrains Mono', monospace", color: '#333', flexShrink: 0 }}>refs</span>
+                                {connectedImages.map(img => {
+                                    const name = img.label || img.filename.replace(/\.[^.]+$/, '');
+                                    const slug = name.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+                                    const hasLabel = !!img.label;
+                                    return (
+                                        <span key={img.id} style={{
+                                            fontSize: 8, fontFamily: "'JetBrains Mono', monospace",
+                                            color: hasLabel ? `${activeGlow}0.7)` : '#444',
+                                            background: hasLabel ? `${activeGlow}0.06)` : 'transparent',
+                                            border: `1px solid ${hasLabel ? `${activeGlow}0.2)` : 'rgba(255,255,255,0.05)'}`,
+                                            borderRadius: 3, padding: '0 4px',
+                                        }}>@{slug}</span>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 </div>
 

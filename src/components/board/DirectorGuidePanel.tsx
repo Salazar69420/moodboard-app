@@ -12,7 +12,7 @@ interface Props {
   anchorY: number;
 }
 
-const PANEL_WIDTH = 320;
+const PANEL_WIDTH = 340;
 
 export function DirectorGuidePanel({
   guide,
@@ -24,7 +24,9 @@ export function DirectorGuidePanel({
   anchorY,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [expandedOption, setExpandedOption] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -39,6 +41,7 @@ export function DirectorGuidePanel({
     const t = setTimeout(() => {
       document.addEventListener('keydown', handleKey);
       document.addEventListener('click', handleClick);
+      searchRef.current?.focus();
     }, 60);
     return () => {
       clearTimeout(t);
@@ -57,6 +60,17 @@ export function DirectorGuidePanel({
   const approxHeight = 80 + guide.options.length * 58;
   const rawTop = anchorY - approxHeight / 2;
   const top = Math.max(8, Math.min(rawTop, window.innerHeight - approxHeight - 8));
+
+  // Filtered options
+  const filteredOptions = search.trim()
+    ? guide.options.filter(opt => {
+        const q = search.toLowerCase();
+        return opt.name.toLowerCase().includes(q)
+          || (opt.label || '').toLowerCase().includes(q)
+          || (opt.effect || '').toLowerCase().includes(q)
+          || (opt.insert || '').toLowerCase().includes(q);
+      })
+    : guide.options;
 
   return createPortal(
     <div
@@ -118,6 +132,14 @@ export function DirectorGuidePanel({
         }}>
           Director's Guide — {promptLabel.replace('?', '')}
         </span>
+        <span style={{
+          fontSize: 8,
+          fontFamily: "'JetBrains Mono', monospace",
+          color: `${categoryColor}50`,
+          letterSpacing: '0.04em',
+        }}>
+          {filteredOptions.length}/{guide.options.length}
+        </span>
         <button
           onClick={onClose}
           onPointerDown={(e) => e.stopPropagation()}
@@ -155,9 +177,53 @@ export function DirectorGuidePanel({
         {guide.context}
       </div>
 
+      {/* Search bar */}
+      <div style={{ position: 'relative', marginBottom: 7 }}>
+        <svg style={{ position: 'absolute', left: 7, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+          width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={`${categoryColor}60`} strokeWidth="2">
+          <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        <input
+          ref={searchRef}
+          type="text"
+          placeholder="Filter options…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Escape') { if (search) { setSearch(''); e.stopPropagation(); } else { onClose(); } } }}
+          onPointerDown={e => e.stopPropagation()}
+          style={{
+            width: '100%',
+            background: `${categoryColor}08`,
+            border: `1px solid ${categoryColor}20`,
+            borderRadius: 7,
+            padding: '5px 28px 5px 22px',
+            fontSize: 10,
+            fontFamily: "'Inter', system-ui, sans-serif",
+            color: 'rgba(255,255,255,0.75)',
+            outline: 'none',
+            caretColor: categoryColor,
+            boxSizing: 'border-box',
+            transition: 'border-color 0.12s ease',
+          }}
+          onFocus={e => (e.currentTarget as HTMLElement).style.borderColor = `${categoryColor}45`}
+          onBlur={e => (e.currentTarget as HTMLElement).style.borderColor = `${categoryColor}20`}
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: `${categoryColor}60`, cursor: 'pointer', padding: 0, fontSize: 9 }}
+          >✕</button>
+        )}
+      </div>
+
       {/* Options */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {guide.options.map((opt) => {
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 320, overflowY: 'auto' }}>
+        {filteredOptions.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '16px 0', fontSize: 10, fontFamily: "'Inter', system-ui, sans-serif", color: 'rgba(255,255,255,0.2)' }}>
+            No options match "{search}"
+          </div>
+        ) : null}
+        {filteredOptions.map((opt) => {
           const isExpanded = expandedOption === opt.name;
           const hasSubOptions = opt.subOptions && opt.subOptions.length > 0;
 

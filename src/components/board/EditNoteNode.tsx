@@ -6,7 +6,6 @@ import { useBoardStore } from '../../stores/useBoardStore';
 import { useImageStore } from '../../stores/useImageStore';
 import { useMention } from '../../hooks/useMention';
 import { showNoteContextMenu } from './NoteContextMenu';
-import { useVoiceQuiz } from '../../hooks/useVoiceQuiz';
 
 interface Props {
     note: EditNote;
@@ -23,7 +22,6 @@ export function EditNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
     const connections = useBoardStore((s) => s.connections);
     const boardMode = useBoardStore((s) => s.boardMode);
     const images = useImageStore((s) => s.images);
-    const { openQuiz } = useVoiceQuiz();
 
     const connectedImages = images.filter(img =>
         connections.some(c =>
@@ -225,46 +223,24 @@ export function EditNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
 
                     {/* Controls */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                        {/* Voice Quiz mic button */}
-                        <button
-                            style={{
-                                opacity: showControls ? 1 : 0,
-                                background: 'transparent',
-                                border: 'none',
-                                color: category.color,
-                                cursor: 'pointer',
-                                padding: IS_TOUCH ? '6px' : '3px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                transition: 'opacity 0.15s ease',
-                                touchAction: 'manipulation',
-                            }}
-                            onClick={(e) => { e.stopPropagation(); openQuiz(note.id, 'edit'); }}
-                            title="Talk to AI about this node"
-                        >
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                                <line x1="12" y1="19" x2="12" y2="23" />
-                                <line x1="8" y1="23" x2="16" y2="23" />
-                            </svg>
-                        </button>
-
                         {/* Completion badge */}
                         <div style={{
-                            fontSize: 9,
+                            fontSize: 8,
                             fontFamily: "'JetBrains Mono', monospace",
-                            color: completionPct === 100 ? '#4ade80' : category.color,
+                            color: completionPct === 100 ? '#4ade80' : completionPct > 0 ? category.color : 'rgba(255,255,255,0.2)',
                             background: completionPct === 100
                                 ? 'rgba(74,222,128,0.1)'
-                                : `${category.color}12`,
-                            border: `1px solid ${completionPct === 100 ? 'rgba(74,222,128,0.25)' : `${category.color}20`}`,
-                            borderRadius: 5,
+                                : completionPct > 0
+                                    ? `${category.color}10`
+                                    : 'rgba(255,255,255,0.03)',
+                            border: `1px solid ${completionPct === 100 ? 'rgba(74,222,128,0.2)' : completionPct > 0 ? `${category.color}20` : 'rgba(255,255,255,0.07)'}`,
+                            borderRadius: 4,
                             padding: '1px 5px',
-                            fontWeight: 700,
+                            fontWeight: 600,
                             transition: 'all 0.2s ease',
+                            letterSpacing: '0.02em',
                         }}>
-                            {completedCount}/{totalPrompts}
+                            {completionPct === 100 ? '✓ done' : `${completedCount}/${totalPrompts}`}
                         </div>
 
                         {/* Minimize toggle */}
@@ -328,8 +304,26 @@ export function EditNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
                             : 'none',
                     }}
                 >
-                    {/* ── Prompt checklist ── */}
-                    <div style={{ padding: '9px 11px 5px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {/* ── Progress bar (top) ── */}
+                    <div style={{ height: 2, background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                        <div style={{
+                            height: '100%',
+                            width: `${completionPct}%`,
+                            background: completionPct === 100
+                                ? 'linear-gradient(to right, #4ade80, #22c55e)'
+                                : `linear-gradient(to right, ${category.color}70, ${category.color})`,
+                            transition: 'width 0.35s cubic-bezier(0.22, 1, 0.36, 1)',
+                            boxShadow: completionPct > 0 ? `0 0 6px ${category.color}50` : 'none',
+                        }} />
+                    </div>
+
+                    {/* ── Prompt checklist (2-column grid) ── */}
+                    <div style={{
+                        padding: '8px 10px 4px',
+                        display: 'grid',
+                        gridTemplateColumns: category.prompts.length > 4 ? '1fr 1fr' : '1fr',
+                        gap: '2px 6px',
+                    }}>
                         {category.prompts.map(prompt => {
                             const checked = note.checkedPrompts.includes(prompt);
                             const guide = EDIT_DIRECTOR_GUIDES[prompt];
@@ -339,60 +333,58 @@ export function EditNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
                                     style={{
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: 8,
+                                        gap: 6,
                                         cursor: 'pointer',
-                                        padding: IS_TOUCH ? '4px 0' : '2px 0',
+                                        padding: IS_TOUCH ? '5px 4px' : '3px 4px',
+                                        borderRadius: 5,
+                                        background: checked ? `${category.color}0a` : 'transparent',
+                                        border: `1px solid ${checked ? `${category.color}20` : 'transparent'}`,
+                                        transition: 'background 0.15s ease, border-color 0.15s ease',
                                     }}
                                     onPointerDown={e => e.stopPropagation()}
                                     onMouseDown={e => e.stopPropagation()}
+                                    onClick={(e) => { e.stopPropagation(); togglePrompt(prompt); }}
                                 >
-                                    <div
-                                        onClick={(e) => { e.stopPropagation(); togglePrompt(prompt); }}
-                                        style={{
-                                            width: IS_TOUCH ? 18 : 13,
-                                            height: IS_TOUCH ? 18 : 13,
-                                            borderRadius: 4,
-                                            border: `1.5px solid ${checked ? category.color : 'rgba(255,255,255,0.12)'}`,
-                                            background: checked ? `${category.color}25` : 'rgba(255,255,255,0.03)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            flexShrink: 0,
-                                            transition: 'all 0.15s cubic-bezier(0.22, 1, 0.36, 1)',
-                                            cursor: 'pointer',
-                                            touchAction: 'manipulation',
-                                            backdropFilter: checked ? 'none' : 'blur(4px)',
-                                        }}
-                                    >
+                                    <div style={{
+                                        width: IS_TOUCH ? 16 : 12,
+                                        height: IS_TOUCH ? 16 : 12,
+                                        borderRadius: 3,
+                                        border: `1.5px solid ${checked ? category.color : 'rgba(255,255,255,0.15)'}`,
+                                        background: checked ? `${category.color}30` : 'rgba(255,255,255,0.03)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flexShrink: 0,
+                                        transition: 'all 0.15s cubic-bezier(0.22, 1, 0.36, 1)',
+                                        cursor: 'pointer',
+                                        touchAction: 'manipulation',
+                                    }}>
                                         {checked && (
-                                            <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
-                                                <polyline
-                                                    points="2,6 5,9 10,3"
-                                                    stroke={category.color}
-                                                    strokeWidth="2"
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                />
+                                            <svg width="7" height="7" viewBox="0 0 12 12" fill="none">
+                                                <polyline points="2,6 5,9 10,3" stroke={category.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                                             </svg>
                                         )}
                                     </div>
-                                    <span
-                                        onClick={(e) => { e.stopPropagation(); togglePrompt(prompt); }}
-                                        style={{
-                                            flex: 1,
-                                            fontSize: IS_TOUCH ? 11 : 10,
-                                            fontFamily: "'Inter', system-ui, sans-serif",
-                                            color: checked ? category.color : 'rgba(255,255,255,0.38)',
-                                            transition: 'color 0.15s ease',
-                                            userSelect: 'none',
-                                            letterSpacing: '0.01em',
-                                            cursor: 'pointer',
-                                        }}>
+                                    <span style={{
+                                        flex: 1,
+                                        fontSize: IS_TOUCH ? 10.5 : 9.5,
+                                        fontFamily: "'Inter', system-ui, sans-serif",
+                                        color: checked ? category.color : 'rgba(255,255,255,0.42)',
+                                        textDecoration: checked ? 'none' : 'none',
+                                        fontWeight: checked ? 500 : 400,
+                                        transition: 'color 0.15s ease, font-weight 0.15s ease',
+                                        userSelect: 'none',
+                                        letterSpacing: '0.01em',
+                                        cursor: 'pointer',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                    }}>
                                         {prompt}
                                     </span>
                                     {/* Director's Guide ⓘ button */}
                                     {guide && (
-                                        <div style={{ position: 'relative', flexShrink: 0 }}>
+                                        <div style={{ position: 'relative', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -404,12 +396,13 @@ export function EditNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
                                                     }
                                                 }}
                                                 onPointerDown={(e) => e.stopPropagation()}
+                                                title="Director's Guide"
                                                 style={{
                                                     width: 14, height: 14,
                                                     borderRadius: '50%',
-                                                    background: activeGuide?.prompt === prompt ? `${category.color}25` : 'rgba(255,255,255,0.06)',
-                                                    border: `1px solid ${activeGuide?.prompt === prompt ? `${category.color}50` : 'rgba(255,255,255,0.10)'}`,
-                                                    color: activeGuide?.prompt === prompt ? category.color : 'rgba(255,255,255,0.3)',
+                                                    background: activeGuide?.prompt === prompt ? `${category.color}25` : 'rgba(255,255,255,0.05)',
+                                                    border: `1px solid ${activeGuide?.prompt === prompt ? `${category.color}50` : 'rgba(255,255,255,0.08)'}`,
+                                                    color: activeGuide?.prompt === prompt ? category.color : 'rgba(255,255,255,0.25)',
                                                     fontSize: 8,
                                                     fontFamily: "'Inter', system-ui, sans-serif",
                                                     fontWeight: 700,
@@ -421,6 +414,16 @@ export function EditNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
                                                     lineHeight: 1,
                                                     padding: 0,
                                                     boxShadow: activeGuide?.prompt === prompt ? `0 0 8px ${category.color}40` : 'none',
+                                                }}
+                                                onMouseEnter={e => {
+                                                    (e.currentTarget as HTMLElement).style.color = category.color;
+                                                    (e.currentTarget as HTMLElement).style.borderColor = `${category.color}40`;
+                                                }}
+                                                onMouseLeave={e => {
+                                                    if (activeGuide?.prompt !== prompt) {
+                                                        (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.25)';
+                                                        (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)';
+                                                    }
                                                 }}
                                             >
                                                 i
@@ -441,20 +444,6 @@ export function EditNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
                                 </div>
                             );
                         })}
-                    </div>
-
-                    {/* ── Progress bar ── */}
-                    <div style={{ margin: '6px 11px 0', height: 2, background: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden' }}>
-                        <div style={{
-                            height: '100%',
-                            width: `${completionPct}%`,
-                            background: completionPct === 100
-                                ? 'linear-gradient(to right, #4ade80, #22c55e)'
-                                : `linear-gradient(to right, ${category.color}70, ${category.color})`,
-                            borderRadius: 2,
-                            transition: 'width 0.35s cubic-bezier(0.22, 1, 0.36, 1)',
-                            boxShadow: completionPct > 0 ? `0 0 6px ${category.color}50` : 'none',
-                        }} />
                     </div>
 
                     {/* ── Textarea ── */}
@@ -564,7 +553,7 @@ export function EditNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
                         onPointerDown={e => e.stopPropagation()}
                         onMouseDown={e => e.stopPropagation()}
                         style={{
-                            padding: '4px 11px 8px',
+                            padding: '5px 10px 7px',
                             borderTop: `1px solid rgba(255,255,255,0.05)`,
                             display: 'flex',
                             flexWrap: 'wrap',
@@ -573,13 +562,14 @@ export function EditNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
                         }}
                     >
                         <span style={{
-                            fontSize: 9,
+                            fontSize: 8,
                             fontFamily: "'JetBrains Mono', monospace",
-                            color: 'rgba(255,255,255,0.2)',
-                            letterSpacing: '0.05em',
+                            color: 'rgba(255,255,255,0.18)',
+                            letterSpacing: '0.06em',
+                            textTransform: 'uppercase',
                             flexShrink: 0,
                         }}>
-                            refs:
+                            refs
                         </span>
                         {connectedImages.map(img => {
                             const name = img.label || img.filename.replace(/\.[^.]+$/, '');
@@ -588,24 +578,33 @@ export function EditNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
                             return (
                                 <button
                                     key={img.id}
-                                    title={hasLabel ? `Insert @${slug}` : `Label this image to use as @reference`}
+                                    title={hasLabel ? `Click to insert @${slug}` : 'Add a label to this image to use it as @reference'}
                                     style={{
                                         fontSize: 9,
                                         fontFamily: "'JetBrains Mono', monospace",
-                                        color: hasLabel ? category.color : 'rgba(255,255,255,0.25)',
-                                        background: hasLabel ? `${category.color}0e` : 'rgba(255,255,255,0.03)',
-                                        border: `1px solid ${hasLabel ? `${category.color}25` : 'rgba(255,255,255,0.07)'}`,
+                                        color: hasLabel ? category.color : 'rgba(255,255,255,0.2)',
+                                        background: hasLabel ? `${category.color}10` : 'rgba(255,255,255,0.03)',
+                                        border: `1px solid ${hasLabel ? `${category.color}22` : 'rgba(255,255,255,0.06)'}`,
                                         borderRadius: 4,
-                                        padding: '1px 6px',
+                                        padding: '2px 6px',
                                         cursor: hasLabel ? 'pointer' : 'default',
-                                        transition: 'background 0.15s ease, border-color 0.15s ease',
+                                        transition: 'background 0.12s ease, border-color 0.12s ease',
                                         touchAction: 'manipulation',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 3,
                                     }}
                                     onMouseEnter={e => {
-                                        if (hasLabel) (e.currentTarget as HTMLElement).style.background = `${category.color}20`;
+                                        if (hasLabel) {
+                                            (e.currentTarget as HTMLElement).style.background = `${category.color}1e`;
+                                            (e.currentTarget as HTMLElement).style.borderColor = `${category.color}40`;
+                                        }
                                     }}
                                     onMouseLeave={e => {
-                                        if (hasLabel) (e.currentTarget as HTMLElement).style.background = `${category.color}0e`;
+                                        if (hasLabel) {
+                                            (e.currentTarget as HTMLElement).style.background = `${category.color}10`;
+                                            (e.currentTarget as HTMLElement).style.borderColor = `${category.color}22`;
+                                        }
                                     }}
                                     onPointerDown={e => e.preventDefault()}
                                     onClick={(e) => {
@@ -624,7 +623,11 @@ export function EditNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
                                         }, 0);
                                     }}
                                 >
-                                    {hasLabel ? `@${slug}` : `@? ${slug}`}
+                                    {hasLabel ? (
+                                        <><span style={{ opacity: 0.6 }}>@</span>{slug}</>
+                                    ) : (
+                                        <><span style={{ opacity: 0.4 }}>@?</span> {slug}</>
+                                    )}
                                 </button>
                             );
                         })}

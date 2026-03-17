@@ -376,7 +376,11 @@ export interface PromptNode {
   width: number;
   isMinimized: boolean;
   createdAt: number;
-  history?: PromptVersion[]; // last 3 versions (most recent first)
+  history?: PromptVersion[]; // last 20 versions (most recent first)
+  // Scene context for I2V generation
+  firstFrameImageId?: string;
+  lastFrameImageId?: string;
+  previousSceneImageId?: string;
 }
 
 // ─── Scene Groups ─────────────────────────────────────────────────────────────
@@ -1241,11 +1245,18 @@ export const EDIT_DIRECTOR_GUIDES: Record<string, DirectorGuide> = {
 
 // ─── God Mode Node ─────────────────────────────────────────────────────────────
 
+export interface GodModeRule {
+  id: string;
+  text: string;
+  enabled: boolean;
+}
+
 export interface GodModeNode {
   id: string;
   projectId: string;
   title: string;      // user-editable label, e.g. "Brand Rules", "Style Guide"
-  text: string;       // instructions always injected into every prompt
+  text: string;       // joined enabled rules, injected into every prompt
+  rules?: GodModeRule[]; // structured rules list (source of truth)
   isEnabled: boolean; // on/off toggle
   x: number;
   y: number;

@@ -644,9 +644,9 @@ label[for] {
 }
 
 .shot-panel .shot-thumb {
-  width: 44px;
-  height: 33px;
-  border-radius: 4px;
+  width: 56px;
+  height: 42px;
+  border-radius: 5px;
   object-fit: cover;
   border: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;

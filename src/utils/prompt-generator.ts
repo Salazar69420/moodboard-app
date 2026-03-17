@@ -8,7 +8,10 @@ Your job: take the filmmaker's raw shot notes and reference image(s), then compo
 
 STRICT RULES:
 1. ONLY use information from the notes and what is literally visible in the reference image(s). Never invent, assume, or add details beyond what is provided.
-   - The first image is the PRIMARY reference. Additional images are supplementary references (character sheets, style references, etc.) — synthesize accordingly.
+   - The first image is the PRIMARY reference (the current frame). Additional images are supplementary references — synthesize accordingly.
+   - If a FIRST FRAME image is provided, it defines the exact starting state of the shot — match it precisely.
+   - If a LAST FRAME image is provided, it defines the target end state — the animation should resolve to it.
+   - If a PREVIOUS SCENE image is provided, use it for narrative/visual continuity context only (color, character state, environment carry-over).
    - If notes contain @mentions (e.g. @character_sheet), pull specific visual details from the matching supplementary image.
 2. Preserve the filmmaker's exact creative intent. You are a writing tool, not a creative director.
 3. Fix grammar, spelling, and phrasing to read naturally and professionally.
@@ -80,6 +83,12 @@ export interface PromptResult {
   timestamp: number;
 }
 
+export interface SceneContextImages {
+  firstFrame?: { blobId: string; mimeType: string };
+  lastFrame?: { blobId: string; mimeType: string };
+  previousScene?: { blobId: string; mimeType: string };
+}
+
 export async function generatePrompt(
   apiKey: string,
   model: string,
@@ -88,6 +97,7 @@ export async function generatePrompt(
   notes: CategoryNote[],
   connectedImages: import('../types').BoardImage[] = [],
   godModeNodes: GodModeNode[] = [],
+  sceneContext: SceneContextImages = {},
 ): Promise<PromptResult> {
   let userMessage = buildUserMessage(notes);
 
@@ -108,6 +118,11 @@ export async function generatePrompt(
     })
   );
   const validConnected = connectedBase64s.filter(c => c !== null) as { b64: string; mime: string; label?: string }[];
+
+  // Resolve scene context images
+  const firstFrameB64 = sceneContext.firstFrame ? await imageToBase64(sceneContext.firstFrame.blobId) : null;
+  const lastFrameB64 = sceneContext.lastFrame ? await imageToBase64(sceneContext.lastFrame.blobId) : null;
+  const prevSceneB64 = sceneContext.previousScene ? await imageToBase64(sceneContext.previousScene.blobId) : null;
 
   const messages: Array<{
     role: string;
@@ -134,6 +149,29 @@ export async function generatePrompt(
       contentParts.push({
         type: 'image_url',
         image_url: { url: `data:${conn.mime || 'image/jpeg'};base64,${conn.b64}` },
+      });
+    }
+
+    // Inject scene context frames
+    if (prevSceneB64 && sceneContext.previousScene) {
+      contentParts.push({ type: 'text', text: 'PREVIOUS SCENE (use for visual/narrative continuity):' });
+      contentParts.push({
+        type: 'image_url',
+        image_url: { url: `data:${sceneContext.previousScene.mimeType || 'image/jpeg'};base64,${prevSceneB64}` },
+      });
+    }
+    if (firstFrameB64 && sceneContext.firstFrame) {
+      contentParts.push({ type: 'text', text: 'FIRST FRAME (animation must start from this exact state):' });
+      contentParts.push({
+        type: 'image_url',
+        image_url: { url: `data:${sceneContext.firstFrame.mimeType || 'image/jpeg'};base64,${firstFrameB64}` },
+      });
+    }
+    if (lastFrameB64 && sceneContext.lastFrame) {
+      contentParts.push({ type: 'text', text: 'LAST FRAME (animation must resolve to this exact state):' });
+      contentParts.push({
+        type: 'image_url',
+        image_url: { url: `data:${sceneContext.lastFrame.mimeType || 'image/jpeg'};base64,${lastFrameB64}` },
       });
     }
 
