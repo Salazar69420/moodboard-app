@@ -3,10 +3,8 @@ import { useUIStore } from '../../stores/useUIStore';
 import { useImageStore } from '../../stores/useImageStore';
 import { useProjectStore } from '../../stores/useProjectStore';
 import { useBoardStore } from '../../stores/useBoardStore';
-import { useSettingsStore } from '../../stores/useSettingsStore';
 import { copyImageToClipboard } from '../../utils/clipboard';
 import { downloadMedia } from '../../utils/download';
-import { reverseEngineerI2V, reverseEngineerEdit } from '../../utils/reverse-engineer';
 import { SHOT_CATEGORIES, EDIT_CATEGORIES } from '../../types';
 import type { ShotCategoryId, EditCategoryId } from '../../types';
 
@@ -30,16 +28,8 @@ export function ImageContextMenu() {
   const projects = useProjectStore((s) => s.projects);
   const incrementImageCount = useProjectStore((s) => s.incrementImageCount);
   const createProject = useProjectStore((s) => s.createProject);
-  const apiKey = useSettingsStore((s) => s.apiKey);
-  const model = useSettingsStore((s) => s.model);
-  const godModeNodes = useBoardStore((s) => s.godModeNodes);
-  const addCategoryNoteAction = useBoardStore((s) => s.addCategoryNote);
-  const addEditNoteAction = useBoardStore((s) => s.addEditNote);
-
   const [showNoteSubmenu, setShowNoteSubmenu] = useState(false);
   const [showMoveSubmenu, setShowMoveSubmenu] = useState(false);
-  const [showReverseEngineer, setShowReverseEngineer] = useState(false);
-  const [reverseLoading, setReverseLoading] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [activeSection, setActiveSection] = useState<'i2v' | 'edit'>('i2v');
 
@@ -47,8 +37,6 @@ export function ImageContextMenu() {
     if (!contextMenu.visible) {
       setShowNoteSubmenu(false);
       setShowMoveSubmenu(false);
-      setShowReverseEngineer(false);
-      setReverseLoading(false);
       setNewProjectName('');
       setActiveSection('i2v');
       return;
@@ -560,7 +548,7 @@ export function ImageContextMenu() {
         {/* ── Move to Project ── */}
         <div style={{ position: 'relative' }}>
           <button
-            onClick={(e) => { e.stopPropagation(); setShowMoveSubmenu(!showMoveSubmenu); setShowReverseEngineer(false); }}
+            onClick={(e) => { e.stopPropagation(); setShowMoveSubmenu(!showMoveSubmenu); }}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 9,
               padding: '7px 10px', borderRadius: 8, background: 'transparent',
@@ -676,139 +664,6 @@ export function ImageContextMenu() {
                   +
                 </button>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── Reverse Engineer ── */}
-        <div style={{ position: 'relative' }}>
-          <button
-            onClick={(e) => { e.stopPropagation(); setShowReverseEngineer(!showReverseEngineer); setShowMoveSubmenu(false); }}
-            disabled={!apiKey}
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-              padding: '7px 10px', borderRadius: 8, background: 'transparent',
-              border: 'none', color: apiKey ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.2)', fontSize: 13,
-              cursor: apiKey ? 'pointer' : 'not-allowed', transition: 'background 0.12s ease, color 0.12s ease', textAlign: 'left',
-            }}
-            onMouseEnter={e => { if (apiKey) { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; (e.currentTarget as HTMLElement).style.color = '#fff'; } }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = apiKey ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.2)'; }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 16v-4M12 8h.01" />
-            </svg>
-            Reverse Engineer{reverseLoading ? '…' : ''}
-            {!apiKey && <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginLeft: 'auto' }}>API key needed</span>}
-          </button>
-
-          {showReverseEngineer && apiKey && (
-            <div
-              onClick={e => e.stopPropagation()}
-              style={{
-                position: 'absolute', left: '100%', top: 0, marginLeft: 4,
-                background: 'rgba(10,11,20,0.97)', backdropFilter: 'blur(28px) saturate(200%)',
-                border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12,
-                padding: 6, minWidth: 200, zIndex: 200,
-                boxShadow: '0 12px 40px rgba(0,0,0,0.8)',
-                animation: 'modalSlideUp 0.15s ease forwards',
-              }}
-            >
-              <div style={{ padding: '4px 8px 6px', fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.05em' }}>
-                Analyze & auto-fill notes
-              </div>
-
-              <button
-                disabled={reverseLoading}
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  if (!currentProjectId || !image) return;
-                  setReverseLoading(true);
-                  try {
-                    const i2vExisting: Record<string, string> = {};
-                    for (const note of categoryNotes.filter(n => n.imageId === image.id)) {
-                      if (note.text.trim()) i2vExisting[note.categoryId] = note.text;
-                    }
-                    const result = await reverseEngineerI2V(apiKey, model, image.blobId, image.mimeType, godModeNodes, Object.keys(i2vExisting).length > 0 ? i2vExisting : undefined);
-                    const displayW = image.displayWidth ?? Math.min(image.width, 350);
-                    let noteY = image.y + 20;
-                    for (const cat of SHOT_CATEGORIES) {
-                      const text = result.notes[cat.id] || '';
-                      if (text) {
-                        const noteX = image.x + displayW + 30;
-                        const noteId = await addCategoryNoteAction(currentProjectId, image.id, cat.id, noteX, noteY);
-                        const updateCategoryNote = useBoardStore.getState().updateCategoryNote;
-                        await updateCategoryNote(noteId, { text });
-                        noteY += 130;
-                      }
-                    }
-                    hideContextMenu();
-                    showToast('I2V notes reverse-engineered ✨');
-                  } catch (err: any) {
-                    showToast(`Error: ${err.message?.substring(0, 60)}`);
-                  } finally {
-                    setReverseLoading(false);
-                  }
-                }}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '7px 10px', borderRadius: 7, background: 'transparent',
-                  border: 'none', color: reverseLoading ? 'rgba(255,255,255,0.3)' : '#f97316', fontSize: 12,
-                  cursor: reverseLoading ? 'wait' : 'pointer', transition: 'background 0.12s ease', textAlign: 'left',
-                  fontFamily: "'Inter', system-ui, sans-serif",
-                }}
-                onMouseEnter={e => { if (!reverseLoading) (e.currentTarget as HTMLElement).style.background = 'rgba(249,115,22,0.08)'; }}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
-              >
-                <span style={{ fontSize: 14 }}>🎬</span>
-                {reverseLoading ? 'Analyzing…' : 'I2V Shot Notes'}
-              </button>
-
-              <button
-                disabled={reverseLoading}
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  if (!currentProjectId || !image) return;
-                  setReverseLoading(true);
-                  try {
-                    const editExisting: Record<string, string> = {};
-                    for (const note of editNotes.filter(n => n.imageId === image.id)) {
-                      if (note.text.trim()) editExisting[note.categoryId] = note.text;
-                    }
-                    const result = await reverseEngineerEdit(apiKey, model, image.blobId, image.mimeType, godModeNodes, Object.keys(editExisting).length > 0 ? editExisting : undefined);
-                    const displayW = image.displayWidth ?? Math.min(image.width, 350);
-                    let noteY = image.y + 20;
-                    for (const cat of EDIT_CATEGORIES) {
-                      const text = result.notes[cat.id] || '';
-                      if (text) {
-                        const noteX = image.x + displayW + 30;
-                        const noteId = await addEditNoteAction(currentProjectId, image.id, cat.id, noteX, noteY);
-                        const updateEditNote = useBoardStore.getState().updateEditNote;
-                        await updateEditNote(noteId, { text });
-                        noteY += 130;
-                      }
-                    }
-                    hideContextMenu();
-                    showToast('Edit notes reverse-engineered ✨');
-                  } catch (err: any) {
-                    showToast(`Error: ${err.message?.substring(0, 60)}`);
-                  } finally {
-                    setReverseLoading(false);
-                  }
-                }}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '7px 10px', borderRadius: 7, background: 'transparent',
-                  border: 'none', color: reverseLoading ? 'rgba(255,255,255,0.3)' : '#22d3ee', fontSize: 12,
-                  cursor: reverseLoading ? 'wait' : 'pointer', transition: 'background 0.12s ease', textAlign: 'left',
-                  fontFamily: "'Inter', system-ui, sans-serif",
-                }}
-                onMouseEnter={e => { if (!reverseLoading) (e.currentTarget as HTMLElement).style.background = 'rgba(34,211,238,0.08)'; }}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
-              >
-                <span style={{ fontSize: 14 }}>✏️</span>
-                {reverseLoading ? 'Analyzing…' : 'Edit Notes (6-Part)'}
-              </button>
             </div>
           )}
         </div>

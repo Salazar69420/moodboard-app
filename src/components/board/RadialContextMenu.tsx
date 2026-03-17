@@ -6,7 +6,6 @@ import { useProjectStore } from '../../stores/useProjectStore';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import { SHOT_CATEGORIES, EDIT_CATEGORIES } from '../../types';
 import type { ShotCategoryId, EditCategoryId } from '../../types';
-import { reverseEngineerI2V, reverseEngineerEdit } from '../../utils/reverse-engineer';
 import { generateImageName } from '../../utils/ai-features';
 import { downloadMedia } from '../../utils/download';
 import { CategoryPickerPanel } from './CategoryPickerPanel';
@@ -114,70 +113,6 @@ export function RadialContextMenu() {
       color: '#a78bfa',
       action: () => {
         setPickerOpen(true);
-      },
-    });
-
-    // Reverse engineer (AI fill all)
-    items.push({
-      label: 'AI Analyze',
-      icon: '✦',
-      color: '#c084fc',
-      action: async () => {
-        hideContextMenu();
-        const { apiKey, model: settingsModel } = useSettingsStore.getState();
-        if (!apiKey) { showToast('Set your API key in Settings'); return; }
-
-        showToast('AI analyzing image...');
-        try {
-          const model = settingsModel || 'anthropic/claude-opus-4-6';
-          const godNodes = useBoardStore.getState().godModeNodes;
-          const boardState = useBoardStore.getState();
-
-          // Collect existing notes so the AI preserves the director's context
-          const existingNotes: Record<string, string> = {};
-          const savedNotes = boardMode === 'i2v'
-            ? boardState.categoryNotes.filter(n => n.imageId === image.id)
-            : boardState.editNotes.filter(n => n.imageId === image.id);
-          for (const note of savedNotes) {
-            if (note.text.trim()) existingNotes[note.categoryId] = note.text;
-          }
-          const contextNotes = Object.keys(existingNotes).length > 0 ? existingNotes : undefined;
-
-          if (boardMode === 'i2v') {
-            const result = await reverseEngineerI2V(apiKey, model, image.blobId, image.mimeType, godNodes, contextNotes);
-            for (const [catId, text] of Object.entries(result.notes)) {
-              if (!text) continue;
-              const existing = useBoardStore.getState().categoryNotes.find(n => n.imageId === image.id && n.categoryId === catId);
-              if (existing) {
-                useBoardStore.getState().updateCategoryNote(existing.id, { text });
-              } else {
-                const id = await useBoardStore.getState().addCategoryNote(
-                  currentProjectId, image.id, catId as ShotCategoryId,
-                  image.x + (image.displayWidth || 350) + 60, image.y,
-                );
-                if (id) useBoardStore.getState().updateCategoryNote(id, { text });
-              }
-            }
-          } else {
-            const result = await reverseEngineerEdit(apiKey, model, image.blobId, image.mimeType, godNodes, contextNotes);
-            for (const [catId, text] of Object.entries(result.notes)) {
-              if (!text) continue;
-              const existing = useBoardStore.getState().editNotes.find(n => n.imageId === image.id && n.categoryId === catId);
-              if (existing) {
-                useBoardStore.getState().updateEditNote(existing.id, { text });
-              } else {
-                const id = await useBoardStore.getState().addEditNote(
-                  currentProjectId, image.id, catId as EditCategoryId,
-                  image.x + (image.displayWidth || 350) + 60, image.y,
-                );
-                if (id) useBoardStore.getState().updateEditNote(id, { text });
-              }
-            }
-          }
-          showToast('AI analysis complete ✓');
-        } catch (e: any) {
-          showToast(`AI error: ${e.message?.substring(0, 60)}`);
-        }
       },
     });
 

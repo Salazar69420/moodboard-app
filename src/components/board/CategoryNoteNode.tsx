@@ -6,7 +6,6 @@ import { useBoardStore } from '../../stores/useBoardStore';
 import { useImageStore } from '../../stores/useImageStore';
 import { useMention } from '../../hooks/useMention';
 import { showNoteContextMenu } from './NoteContextMenu';
-import { useVoiceQuiz } from '../../hooks/useVoiceQuiz';
 
 const MINIMIZED_HEIGHT = 36;
 const TIME_PRESETS = [5, 10, 15, 30, 60];
@@ -27,7 +26,6 @@ export function CategoryNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
     const connections = useBoardStore((s) => s.connections);
     const boardMode = useBoardStore((s) => s.boardMode);
     const images = useImageStore((s) => s.images);
-    const { openQuiz } = useVoiceQuiz();
 
     const connectedImages = images.filter(img =>
         connections.some(c =>
@@ -226,33 +224,6 @@ export function CategoryNoteNode({ note, zoomScale = 1, autoFocus }: Props) {
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                        {/* Voice Quiz mic button */}
-                        {category.id !== 'time' && (
-                            <button
-                                style={{
-                                    opacity: showControls ? 1 : 0,
-                                    background: 'transparent',
-                                    border: 'none',
-                                    color: category.color,
-                                    cursor: 'pointer',
-                                    padding: IS_TOUCH ? '6px' : '3px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    transition: 'opacity 0.15s ease',
-                                    touchAction: 'manipulation',
-                                }}
-                                onClick={(e) => { e.stopPropagation(); openQuiz(note.id, 'category'); }}
-                                title="Talk to AI about this node"
-                            >
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                                    <line x1="12" y1="19" x2="12" y2="23" />
-                                    <line x1="8" y1="23" x2="16" y2="23" />
-                                </svg>
-                            </button>
-                        )}
-
                         {/* Completion badge */}
                         {totalPrompts > 0 && (
                             <div style={{

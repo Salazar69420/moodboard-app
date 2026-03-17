@@ -6,6 +6,37 @@ import { useSettingsStore } from '../../stores/useSettingsStore';
 import { generatePrompt } from '../../utils/prompt-generator';
 import { generateEditPrompt } from '../../utils/edit-prompt-generator';
 import type { GodModeNode } from '../../types';
+import { useBlobUrl } from '../../hooks/useBlobUrl';
+
+// Small thumbnail for scene context strip
+function NodeFrameThumb({ blobId, label, color }: { blobId: string; label: string; color: string }) {
+    const url = useBlobUrl(blobId);
+    return (
+        <div title={label} style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            background: 'rgba(255,255,255,0.03)',
+            border: `1px solid ${color}33`,
+            borderRadius: 5,
+            padding: '2px 5px 2px 2px',
+            flexShrink: 0,
+        }}>
+            <div style={{ width: 24, height: 18, borderRadius: 3, overflow: 'hidden', background: '#111', flexShrink: 0 }}>
+                {url && <img src={url} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+            </div>
+            <span style={{
+                fontSize: 8,
+                fontFamily: "'JetBrains Mono', monospace",
+                color,
+                letterSpacing: '0.03em',
+                whiteSpace: 'nowrap',
+            }}>
+                {label}
+            </span>
+        </div>
+    );
+}
 
 interface Props {
     node: PromptNode;
@@ -14,7 +45,6 @@ interface Props {
 
 const DRAG_THRESHOLD = 4;
 const IS_TOUCH = typeof window !== 'undefined' && navigator.maxTouchPoints > 0;
-const MAX_HISTORY = 3;
 
 const TYPE_CONFIG = {
     i2v: { label: 'I2V PROMPT', color: '#f97316', border: 'rgba(249,115,22,', glow: 'rgba(249,115,22,' },
@@ -43,6 +73,7 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
     const [animatingMinimize, setAnimatingMinimize] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [copiedHistoryIdx, setCopiedHistoryIdx] = useState<number | null>(null);
     const [isRegenerating, setIsRegenerating] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
 
@@ -159,7 +190,21 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
             const activeGodNodes = godModeNodes.filter((g: GodModeNode) => g.isEnabled && g.text.trim());
             if (node.promptType === 'i2v') {
                 const notes = categoryNotes.filter(n => n.imageId === node.imageId);
-                const result = await generatePrompt(apiKey, model, parentImage.blobId, parentImage.mimeType, notes, connectedImages, activeGodNodes);
+                // Rebuild scene context from stored IDs
+                const sceneContext: import('../../utils/prompt-generator').SceneContextImages = {};
+                if (node.firstFrameImageId) {
+                    const img = images.find(i => i.id === node.firstFrameImageId);
+                    if (img) sceneContext.firstFrame = { blobId: img.blobId, mimeType: img.mimeType };
+                }
+                if (node.lastFrameImageId) {
+                    const img = images.find(i => i.id === node.lastFrameImageId);
+                    if (img) sceneContext.lastFrame = { blobId: img.blobId, mimeType: img.mimeType };
+                }
+                if (node.previousSceneImageId) {
+                    const img = images.find(i => i.id === node.previousSceneImageId);
+                    if (img) sceneContext.previousScene = { blobId: img.blobId, mimeType: img.mimeType };
+                }
+                const result = await generatePrompt(apiKey, model, parentImage.blobId, parentImage.mimeType, notes, connectedImages, activeGodNodes, sceneContext);
                 newText = result.prompt;
                 newModel = result.model;
             } else {
@@ -181,6 +226,21 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
         e.stopPropagation();
         await restorePromptVersion(node.id, index);
     }, [node.id, restorePromptVersion]);
+
+    const handleCopyHistoryEntry = useCallback(async (e: React.MouseEvent, text: string, index: number) => {
+        e.stopPropagation();
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopiedHistoryIdx(index);
+            setTimeout(() => setCopiedHistoryIdx(null), 1500);
+        } catch { /* ignore */ }
+    }, []);
+
+    const handleDeleteHistoryEntry = useCallback(async (e: React.MouseEvent, index: number) => {
+        e.stopPropagation();
+        const newHistory = (node.history || []).filter((_, i) => i !== index);
+        await updatePromptNode(node.id, { history: newHistory });
+    }, [node.id, node.history, updatePromptNode]);
 
     const createdTime = new Date(node.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -409,6 +469,37 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
                         {node.text}
                     </div>
 
+                    {/* Scene Context strip (i2v only) */}
+                    {node.promptType === 'i2v' && (node.firstFrameImageId || node.lastFrameImageId || node.previousSceneImageId) && (() => {
+                        const firstImg = node.firstFrameImageId ? images.find(i => i.id === node.firstFrameImageId) : null;
+                        const lastImg = node.lastFrameImageId ? images.find(i => i.id === node.lastFrameImageId) : null;
+                        const prevImg = node.previousSceneImageId ? images.find(i => i.id === node.previousSceneImageId) : null;
+                        return (
+                            <div style={{
+                                padding: '5px 10px',
+                                borderTop: `1px solid ${cfg.border}0.10)`,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 5,
+                                flexWrap: 'wrap',
+                            }}>
+                                <span style={{
+                                    fontSize: 8,
+                                    fontFamily: "'JetBrains Mono', monospace",
+                                    color: '#444',
+                                    letterSpacing: '0.04em',
+                                    textTransform: 'uppercase',
+                                    flexShrink: 0,
+                                }}>
+                                    ctx
+                                </span>
+                                {prevImg && <NodeFrameThumb blobId={prevImg.blobId} label="◀ Prev" color="#a78bfa" />}
+                                {firstImg && <NodeFrameThumb blobId={firstImg.blobId} label="▷ 1st" color="#4ade80" />}
+                                {lastImg && <NodeFrameThumb blobId={lastImg.blobId} label="▶ Last" color="#f97316" />}
+                            </div>
+                        );
+                    })()}
+
                     {/* Action bar: Regenerate + History */}
                     <div style={{
                         padding: '6px 10px',
@@ -527,133 +618,222 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
                         </span>
                     </div>
 
-                    {/* History panel */}
+                    {/* Prompt History panel */}
                     {showHistory && history.length > 0 && (
                         <div
                             data-scrollable="true"
                             onPointerDown={e => e.stopPropagation()}
+                            onMouseDown={e => e.stopPropagation()}
                             style={{
                                 borderTop: `1px solid ${cfg.border}0.10)`,
-                                maxHeight: 220,
+                                maxHeight: 340,
                                 overflowY: 'auto',
                             }}
                         >
+                            {/* Panel header */}
                             <div style={{
-                                padding: '6px 10px 4px',
+                                padding: '7px 10px 5px',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: 5,
+                                justifyContent: 'space-between',
+                                borderBottom: `1px solid ${cfg.border}0.08)`,
+                                background: `${cfg.glow}0.04)`,
                             }}>
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="2" opacity="0.5">
-                                    <circle cx="12" cy="12" r="10" />
-                                    <polyline points="12 6 12 12 16 14" />
-                                </svg>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="2" opacity="0.6">
+                                        <circle cx="12" cy="12" r="10" />
+                                        <polyline points="12 6 12 12 16 14" />
+                                    </svg>
+                                    <span style={{
+                                        fontSize: 9,
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        color: cfg.color,
+                                        letterSpacing: '0.06em',
+                                        textTransform: 'uppercase',
+                                        fontWeight: 700,
+                                    }}>
+                                        Prompt History
+                                    </span>
+                                </div>
                                 <span style={{
-                                    fontSize: 9,
+                                    fontSize: 8,
                                     fontFamily: "'JetBrains Mono', monospace",
-                                    color: 'rgba(255,255,255,0.3)',
-                                    letterSpacing: '0.06em',
-                                    textTransform: 'uppercase',
+                                    color: 'rgba(255,255,255,0.2)',
                                 }}>
-                                    Previous Versions ({history.length}/{MAX_HISTORY})
+                                    {history.length} saved
                                 </span>
                             </div>
 
+                            <div style={{ padding: '4px 6px 6px' }}>
                             {history.map((ver, idx) => {
-                                const time = new Date(ver.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                const date = new Date(ver.createdAt);
+                                const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                                const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                                 const modelShort = ver.model.split('/').pop() || ver.model;
-                                const preview = ver.text.length > 80 ? ver.text.slice(0, 80) + '…' : ver.text;
+                                const isCopied = copiedHistoryIdx === idx;
 
                                 return (
                                     <div
                                         key={idx}
                                         style={{
-                                            margin: '2px 6px',
-                                            padding: '6px 8px',
-                                            borderRadius: 8,
-                                            border: '1px solid rgba(255,255,255,0.04)',
+                                            margin: '3px 0',
+                                            borderRadius: 9,
+                                            border: '1px solid rgba(255,255,255,0.05)',
                                             background: 'rgba(255,255,255,0.015)',
-                                            transition: 'all 0.12s ease',
-                                            cursor: 'default',
+                                            overflow: 'hidden',
+                                            transition: 'border-color 0.12s ease',
                                         }}
                                         onMouseEnter={(e) => {
-                                            (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)';
-                                            (e.currentTarget as HTMLElement).style.borderColor = `${cfg.border}0.15)`;
+                                            (e.currentTarget as HTMLElement).style.borderColor = `${cfg.border}0.18)`;
                                         }}
                                         onMouseLeave={(e) => {
-                                            (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.015)';
-                                            (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.04)';
+                                            (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.05)';
                                         }}
                                     >
-                                        {/* Version header */}
+                                        {/* Entry header */}
                                         <div style={{
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'space-between',
-                                            marginBottom: 4,
+                                            padding: '5px 8px',
+                                            background: `${cfg.glow}0.03)`,
+                                            borderBottom: '1px solid rgba(255,255,255,0.04)',
                                         }}>
-                                            <div style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 5,
-                                            }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                                                 <span style={{
-                                                    fontSize: 9,
+                                                    fontSize: 8,
                                                     fontFamily: "'JetBrains Mono', monospace",
                                                     color: cfg.color,
-                                                    opacity: 0.6,
-                                                    fontWeight: 600,
+                                                    opacity: 0.7,
+                                                    fontWeight: 700,
                                                 }}>
-                                                    v{history.length - idx}
+                                                    #{history.length - idx}
                                                 </span>
                                                 <span style={{
                                                     fontSize: 8,
                                                     fontFamily: "'JetBrains Mono', monospace",
-                                                    color: 'rgba(255,255,255,0.2)',
+                                                    color: 'rgba(255,255,255,0.22)',
                                                 }}>
-                                                    {time} · {modelShort}
+                                                    {dateStr} {timeStr}
+                                                </span>
+                                                <span style={{
+                                                    fontSize: 7,
+                                                    fontFamily: "'JetBrains Mono', monospace",
+                                                    color: 'rgba(255,255,255,0.15)',
+                                                    background: 'rgba(255,255,255,0.04)',
+                                                    border: '1px solid rgba(255,255,255,0.06)',
+                                                    borderRadius: 3,
+                                                    padding: '0px 4px',
+                                                    maxWidth: 80,
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    whiteSpace: 'nowrap',
+                                                }}>
+                                                    {modelShort}
                                                 </span>
                                             </div>
-                                            <button
-                                                onClick={(e) => handleRestoreVersion(e, idx)}
-                                                style={{
-                                                    fontSize: 9,
-                                                    fontFamily: "'JetBrains Mono', monospace",
-                                                    padding: '2px 7px',
-                                                    borderRadius: 4,
-                                                    border: `1px solid ${cfg.border}0.2)`,
-                                                    background: 'transparent',
-                                                    color: cfg.color,
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.12s ease',
-                                                    opacity: 0.7,
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    (e.currentTarget as HTMLElement).style.background = `${cfg.glow}0.12)`;
-                                                    (e.currentTarget as HTMLElement).style.opacity = '1';
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    (e.currentTarget as HTMLElement).style.background = 'transparent';
-                                                    (e.currentTarget as HTMLElement).style.opacity = '0.7';
-                                                }}
-                                            >
-                                                Restore
-                                            </button>
+                                            {/* Action buttons */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                                <button
+                                                    onClick={(e) => handleCopyHistoryEntry(e, ver.text, idx)}
+                                                    title="Copy this version"
+                                                    style={{
+                                                        fontSize: 8,
+                                                        fontFamily: "'JetBrains Mono', monospace",
+                                                        padding: '2px 6px',
+                                                        borderRadius: 4,
+                                                        border: `1px solid ${isCopied ? `${cfg.border}0.3)` : 'rgba(255,255,255,0.07)'}`,
+                                                        background: isCopied ? `${cfg.glow}0.10)` : 'transparent',
+                                                        color: isCopied ? cfg.color : 'rgba(255,255,255,0.35)',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.12s ease',
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        if (!isCopied) {
+                                                            (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.65)';
+                                                            (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.15)';
+                                                        }
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        if (!isCopied) {
+                                                            (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.35)';
+                                                            (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.07)';
+                                                        }
+                                                    }}
+                                                >
+                                                    {isCopied ? '✓' : 'copy'}
+                                                </button>
+                                                <button
+                                                    onClick={(e) => handleRestoreVersion(e, idx)}
+                                                    title="Restore this version as current"
+                                                    style={{
+                                                        fontSize: 8,
+                                                        fontFamily: "'JetBrains Mono', monospace",
+                                                        padding: '2px 6px',
+                                                        borderRadius: 4,
+                                                        border: `1px solid ${cfg.border}0.2)`,
+                                                        background: 'transparent',
+                                                        color: cfg.color,
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.12s ease',
+                                                        opacity: 0.75,
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        (e.currentTarget as HTMLElement).style.background = `${cfg.glow}0.12)`;
+                                                        (e.currentTarget as HTMLElement).style.opacity = '1';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        (e.currentTarget as HTMLElement).style.background = 'transparent';
+                                                        (e.currentTarget as HTMLElement).style.opacity = '0.75';
+                                                    }}
+                                                >
+                                                    restore
+                                                </button>
+                                                <button
+                                                    onClick={(e) => handleDeleteHistoryEntry(e, idx)}
+                                                    title="Delete this entry"
+                                                    style={{
+                                                        fontSize: 8,
+                                                        padding: '2px 5px',
+                                                        borderRadius: 4,
+                                                        border: '1px solid rgba(239,68,68,0.12)',
+                                                        background: 'transparent',
+                                                        color: 'rgba(239,68,68,0.4)',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.12s ease',
+                                                        fontFamily: "'JetBrains Mono', monospace",
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        (e.currentTarget as HTMLElement).style.color = '#ef4444';
+                                                        (e.currentTarget as HTMLElement).style.borderColor = 'rgba(239,68,68,0.35)';
+                                                        (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.08)';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        (e.currentTarget as HTMLElement).style.color = 'rgba(239,68,68,0.4)';
+                                                        (e.currentTarget as HTMLElement).style.borderColor = 'rgba(239,68,68,0.12)';
+                                                        (e.currentTarget as HTMLElement).style.background = 'transparent';
+                                                    }}
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
                                         </div>
                                         {/* Preview text */}
                                         <div style={{
+                                            padding: '6px 8px 7px',
                                             fontSize: 10,
-                                            color: 'rgba(255,255,255,0.35)',
+                                            color: 'rgba(255,255,255,0.38)',
                                             lineHeight: 1.5,
                                             fontFamily: "'Inter', system-ui, sans-serif",
+                                            userSelect: 'text',
+                                            cursor: 'text',
                                         }}>
-                                            {preview}
+                                            {ver.text.length > 120 ? ver.text.slice(0, 120) + '…' : ver.text}
                                         </div>
                                     </div>
                                 );
                             })}
-
-                            <div style={{ height: 4 }} />
+                            </div>
                         </div>
                     )}
 
