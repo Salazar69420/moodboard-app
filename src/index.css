@@ -2,39 +2,51 @@
 @import "tailwindcss";
 
 :root {
-  --color-bg-primary: #07080e;
-  --color-bg-secondary: #0d0e18;
+  /* ── Refined atmospheric palette (#2) ── */
+  --color-bg-primary: #060711;
+  --color-bg-secondary: #0b0c1a;
   --color-bg-card: rgba(255, 255, 255, 0.03);
   --color-bg-hover: rgba(255, 255, 255, 0.06);
   --color-border: rgba(255, 255, 255, 0.07);
   --color-border-hover: rgba(255, 255, 255, 0.15);
-  --color-text-primary: #e2e4f0;
-  --color-text-secondary: #767a8a;
-  --color-accent: #f97316;
-  --color-accent-hover: #fb923c;
-  --color-accent-glow: rgba(249, 115, 22, 0.25);
-  --color-accent-glow-sm: rgba(249, 115, 22, 0.12);
+  --color-text-primary: #e4e6f2;
+  --color-text-secondary: #6e7386;
+  /* Metallic, slightly muted orange — more premium feel */
+  --color-accent: #ee7c35;
+  --color-accent-hover: #f4914e;
+  --color-accent-glow: rgba(238, 124, 53, 0.20);
+  --color-accent-glow-sm: rgba(238, 124, 53, 0.10);
   --color-danger: #ef4444;
   --color-success: #22c55e;
 
-  /* ── Semantic Color Hierarchy (U5) ── */
-  --color-primary-action: #f97316;
+  /* ── Semantic Color Hierarchy ── */
+  --color-primary-action: #ee7c35;
   --color-active: #f59e0b;
   --color-complete: #2dd4bf;
   --color-outdated: #f87171;
   --color-neutral: rgba(255, 255, 255, 0.06);
-  --color-text-muted: rgba(226, 228, 240, 0.35);
+  --color-text-muted: rgba(228, 230, 242, 0.35);
 
-  /* ── Apple Liquid Glass (U6) ── */
-  --glass-bg: rgba(13, 14, 24, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-blur: blur(32px) saturate(180%) brightness(1.1);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  --glass-radius-panel: 16px;
-  --glass-radius-card: 12px;
-  --glass-radius-sm: 8px;
+  /* ── True Apple Liquid Glass (#1) ── */
+  /* More transparent with stronger blur — glass you can almost see through */
+  --glass-bg: rgba(10, 11, 20, 0.52);
+  --glass-border: rgba(255, 255, 255, 0.11);
+  --glass-blur: blur(48px) saturate(220%) brightness(1.18);
+  --glass-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.50),
+    0 2px 10px rgba(0, 0, 0, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+  --glass-radius-panel: 18px;
+  --glass-radius-card: 14px;
+  --glass-radius-sm: 10px;
 
-  /* ── Spring Animation Tokens (U8) ── */
+  /* ── Mouse-reactive glass shimmer (#5) ── */
+  /* Updated via JS: document.documentElement.style.setProperty('--mouse-x-pct', x) */
+  --mouse-x-pct: 50;
+  --mouse-y-pct: 30;
+
+  /* ── Spring Animation Tokens ── */
   --spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
   --spring-smooth: cubic-bezier(0.25, 1, 0.5, 1);
   --spring-snappy: cubic-bezier(0.19, 1, 0.22, 1);
@@ -49,10 +61,23 @@
 body {
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
-  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  /* system-ui pulls SF Pro on Apple, Segoe on Windows — more native feel (#3) */
+  font-family: system-ui, -apple-system, 'Inter', 'Segoe UI', sans-serif;
   overflow: hidden;
   height: 100vh;
   width: 100vw;
+  /* Safe area insets for notched/Dynamic Island phones (#14) */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Custom cursor — hide default on desktop (#7) */
+@media (pointer: fine) {
+  body, button, a, [role="button"] {
+    cursor: none !important;
+  }
 }
 
 #root {
@@ -330,26 +355,62 @@ body {
   }
 }
 
-/* === GLASS PANEL UTILITY === */
+/* === GLASS PANEL UTILITY — True Apple liquid glass (#1 + #5) === */
 .glass-panel {
-  background: var(--glass-bg);
+  /* Shimmer layer: subtle radial highlight that follows the cursor (#5) */
+  background:
+    radial-gradient(
+      ellipse 100% 80% at calc(var(--mouse-x-pct) * 1%) calc(var(--mouse-y-pct) * 1%),
+      rgba(155, 135, 255, 0.040) 0%,
+      rgba(238, 124, 53, 0.018) 45%,
+      transparent 72%
+    ),
+    var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
   border-radius: var(--glass-radius-panel);
   box-shadow: var(--glass-shadow);
+  position: relative;
+}
+
+/* Specular top-edge highlight — the "wet glass" line (#1) */
+.glass-panel::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.18) 30%,
+    rgba(200, 185, 255, 0.22) 50%,
+    rgba(255, 255, 255, 0.18) 70%,
+    transparent
+  );
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 2;
 }
 
 /* === LIQUID GLASS TOOLBAR === */
 .glass-toolbar {
-  background: rgba(10, 11, 18, 0.85);
-  backdrop-filter: blur(28px) saturate(200%);
-  -webkit-backdrop-filter: blur(28px) saturate(200%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(
+      ellipse 100% 80% at calc(var(--mouse-x-pct) * 1%) calc(var(--mouse-y-pct) * 1%),
+      rgba(155, 135, 255, 0.035) 0%,
+      transparent 65%
+    ),
+    rgba(8, 9, 18, 0.78);
+  backdrop-filter: blur(40px) saturate(220%) brightness(1.15);
+  -webkit-backdrop-filter: blur(40px) saturate(220%) brightness(1.15);
+  border: 1px solid rgba(255, 255, 255, 0.11);
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.6),
     0 2px 8px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
 }
 
 /* === TOUCH / IPAD IMPROVEMENTS === */
@@ -477,14 +538,17 @@ label[for] {
   right: 16px;
   width: 180px;
   height: 120px;
-  background: rgba(8, 9, 16, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  background: rgba(8, 9, 18, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 12px;
   overflow: hidden;
   z-index: 60;
-  backdrop-filter: blur(16px) saturate(180%);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(40px) saturate(200%) brightness(1.12);
+  -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(1.12);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.09);
   cursor: pointer;
+  /* Bring minimap above bottom safe area on mobile (#14) */
+  bottom: calc(44px + env(safe-area-inset-bottom, 0px));
 }
 
 .minimap-viewport {
@@ -524,12 +588,18 @@ label[for] {
   align-items: center;
   gap: 2px;
   padding: 3px;
-  background: rgba(8, 9, 16, 0.92);
-  backdrop-filter: blur(28px) saturate(200%);
-  -webkit-backdrop-filter: blur(28px) saturate(200%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  background:
+    radial-gradient(
+      ellipse 100% 80% at calc(var(--mouse-x-pct) * 1%) calc(var(--mouse-y-pct) * 1%),
+      rgba(155, 135, 255, 0.04) 0%,
+      transparent 70%
+    ),
+    rgba(8, 9, 18, 0.76);
+  backdrop-filter: blur(48px) saturate(220%) brightness(1.15);
+  -webkit-backdrop-filter: blur(48px) saturate(220%) brightness(1.15);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.10);
   animation: toolbarAppear 0.2s cubic-bezier(0.22, 1, 0.36, 1);
   white-space: nowrap;
 }
@@ -633,14 +703,55 @@ label[for] {
   top: 0;
   bottom: 0;
   width: 210px;
-  background: rgba(8, 9, 16, 0.94);
-  backdrop-filter: blur(20px) saturate(180%);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(
+      ellipse 100% 80% at calc(var(--mouse-x-pct) * 1%) calc(var(--mouse-y-pct) * 1%),
+      rgba(155, 135, 255, 0.035) 0%,
+      transparent 65%
+    ),
+    rgba(8, 9, 18, 0.78);
+  backdrop-filter: blur(48px) saturate(220%) brightness(1.15);
+  -webkit-backdrop-filter: blur(48px) saturate(220%) brightness(1.15);
+  border-right: 1px solid rgba(255, 255, 255, 0.10);
   z-index: 55;
   overflow-y: auto;
   animation: panelSlideIn 0.25s cubic-bezier(0.22, 1, 0.36, 1);
   padding: 8px;
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+  box-shadow: 4px 0 32px rgba(0, 0, 0, 0.40);
+}
+
+/* ── Mobile bottom sheet for shot panel (#13) ── */
+@media (pointer: coarse) and (max-width: 768px) {
+  .shot-panel {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100%;
+    height: 52vh;
+    border-radius: 22px 22px 0 0;
+    border-right: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+    animation: bottomSheetSlideUp 300ms var(--spring-smooth);
+    overflow-x: auto;
+    overflow-y: hidden;
+    display: flex;
+    flex-direction: row;
+    padding: 14px 8px 8px;
+  }
+  .shot-panel::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.22);
+    pointer-events: none;
+  }
 }
 
 .shot-panel .shot-thumb {
@@ -838,14 +949,48 @@ label[for] {
   top: 0;
   bottom: 0;
   width: 320px;
-  background: var(--glass-bg);
+  background:
+    radial-gradient(
+      ellipse 100% 80% at calc(var(--mouse-x-pct) * 1%) calc(var(--mouse-y-pct) * 1%),
+      rgba(155, 135, 255, 0.038) 0%,
+      transparent 65%
+    ),
+    var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border-left: 1px solid var(--glass-border);
   z-index: 55;
   overflow-y: auto;
   animation: sidebarSlideIn 320ms var(--spring-smooth);
-  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.4), inset 1px 0 0 rgba(255, 255, 255, 0.06);
+  box-shadow: -8px 0 40px rgba(0, 0, 0, 0.50), inset 1px 0 0 rgba(255, 255, 255, 0.09);
+}
+
+/* ── Mobile bottom sheet for right sidebar (#13) ── */
+@media (pointer: coarse) and (max-width: 768px) {
+  .right-sidebar {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100%;
+    max-height: 74vh;
+    border-radius: 22px 22px 0 0;
+    border-left: none;
+    border-top: 1px solid var(--glass-border);
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+    animation: bottomSheetSlideUp 320ms var(--spring-smooth);
+    /* Pull indicator */
+  }
+  .right-sidebar::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.22);
+    margin: 10px auto 0;
+    flex-shrink: 0;
+  }
 }
 
 .right-sidebar.closing {
@@ -1057,4 +1202,208 @@ label[for] {
 .btn-glass:hover {
   border-color: rgba(255, 255, 255, 0.12);
   box-shadow: var(--glass-shadow), 0 0 12px rgba(255, 255, 255, 0.03);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   APPLE EXPERIENCE UPGRADE — Batch 2
+   #13 Bottom sheets · #14 Safe areas · #16 Orientation ·
+   #19 Touch targets · #21 Modal depth blur
+   ═══════════════════════════════════════════════════════════════ */
+
+/* === BOTTOM SHEET SLIDE UP (#13) === */
+@keyframes bottomSheetSlideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* === MODAL DEPTH BLUR (#21) === */
+/* Wrap modals with this class on the backdrop div */
+.modal-backdrop {
+  backdrop-filter: blur(14px) brightness(0.65) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) brightness(0.65) saturate(120%);
+}
+
+/* Upgrade existing fixed modal backdrops to have depth blur */
+.fixed.inset-0.z-\[90\],
+.fixed.inset-0.z-\[100\],
+.fixed.inset-0.z-\[200\] {
+  backdrop-filter: blur(10px) brightness(0.6);
+  -webkit-backdrop-filter: blur(10px) brightness(0.6);
+}
+
+/* === TOUCH TARGETS — 44×44px Apple HIG minimum (#19) === */
+@media (pointer: coarse) {
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Enlarge all buttons on touch devices */
+  button, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Resize handles: bigger hit area on touch */
+  .resize-handle {
+    width: 28px !important;
+    height: 28px !important;
+  }
+
+  /* Minimap: bigger on touch */
+  .minimap-container {
+    width: 140px;
+    height: 90px;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    right: 12px;
+  }
+
+  /* Pull-to-dismiss indicator on bottom sheets */
+  .shot-panel, .right-sidebar {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* === SAFE AREA INSETS — all key fixed/absolute chrome (#14) === */
+/* BoardHeader / ProjectListPage header: respect Dynamic Island notch */
+.board-header-safe,
+.project-header-safe {
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
+}
+
+/* Undo toast / recap cards above home indicator */
+.undo-toast,
+.session-recap {
+  bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+}
+
+/* === LANDSCAPE PHONE LAYOUT (#16) === */
+/* On small screens in landscape, reclaim vertical space */
+@media (orientation: landscape) and (max-height: 500px) {
+  /* Compress the board header */
+  .board-header-landscape-compact {
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+    min-height: 40px !important;
+  }
+
+  /* Bottom sheets take less height in landscape */
+  .right-sidebar {
+    max-height: 90vh;
+  }
+
+  .shot-panel {
+    height: 80vh;
+  }
+
+  /* Minimap: move up so it doesn't sit on controls */
+  .minimap-container {
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Portrait-specific: shot panel full width, nice padding */
+@media (orientation: portrait) and (pointer: coarse) {
+  .shot-panel {
+    padding-top: 18px; /* space for pull handle */
+  }
+}
+
+/* === CANVAS BACKGROUND — deeper atmospheric indigo tint (#2) === */
+.canvas-bg {
+  background-color: #060711;
+}
+
+/* === SPLASH SCREEN ANIMATIONS (#6) === */
+@keyframes splashLogoReveal {
+  0%   { opacity: 0; letter-spacing: 0.4em; filter: blur(8px); }
+  40%  { opacity: 1; filter: blur(0); }
+  100% { opacity: 1; letter-spacing: 0.12em; filter: blur(0); }
+}
+
+@keyframes splashSubtitleFade {
+  0%   { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes splashLineSweep {
+  0%   { transform: scaleX(0); opacity: 0.6; }
+  60%  { transform: scaleX(1); opacity: 0.6; }
+  100% { transform: scaleX(1); opacity: 0; }
+}
+
+@keyframes splashScreenFadeOut {
+  0%   { opacity: 1; }
+  100% { opacity: 0; pointer-events: none; }
+}
+
+/* === CUSTOM CURSOR (#7) === */
+.custom-cursor-dot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(238, 124, 53, 0.9);
+  box-shadow: 0 0 8px 2px rgba(238, 124, 53, 0.5);
+  pointer-events: none;
+  z-index: 99999;
+  transform: translate(-50%, -50%);
+  transition: width 0.15s ease, height 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.custom-cursor-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(238, 124, 53, 0.30);
+  pointer-events: none;
+  z-index: 99998;
+  transform: translate(-50%, -50%);
+  /* Ring lags behind — spring follow implemented via JS */
+  transition: width 0.2s ease, height 0.2s ease, border-color 0.2s ease;
+}
+
+/* Cursor expands on hover */
+.cursor-hover .custom-cursor-dot {
+  width: 10px;
+  height: 10px;
+  background: rgba(238, 124, 53, 1);
+  box-shadow: 0 0 16px 4px rgba(238, 124, 53, 0.60);
+}
+
+.cursor-hover .custom-cursor-ring {
+  width: 44px;
+  height: 44px;
+  border-color: rgba(238, 124, 53, 0.50);
+}
+
+/* === TYPOGRAPHY (#3) === */
+/* DM Serif Display for brand marks */
+.font-brand {
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-weight: 400;
+}
+
+/* Refined body — system-ui (SF Pro on Apple) */
+.font-ui {
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Keep JetBrains Mono only for code/technical labels */
+.font-code {
+  font-family: 'JetBrains Mono', monospace;
 }

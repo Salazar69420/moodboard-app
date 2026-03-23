@@ -1,6 +1,7 @@
 import { useRef, useCallback, memo, useState, useEffect } from 'react';
 import type { BoardImage } from '../../types';
 import { SHOT_CATEGORIES, EDIT_CATEGORIES } from '../../types';
+import { hapticLight } from '../../utils/haptic';
 import { useBlobUrl } from '../../hooks/useBlobUrl';
 import { useImageStore } from '../../stores/useImageStore';
 import { useUIStore } from '../../stores/useUIStore';
@@ -201,6 +202,7 @@ export const CanvasImage = memo(function CanvasImage({ image, zoomScale }: Canva
         useImageStore.getState().persistPosition(image.id);
       } else {
         // Click without drag - handle focus mode
+        hapticLight();
         const uiState = useUIStore.getState();
         if (uiState.focusedImageId === image.id) {
           // Already focused — toggle selection

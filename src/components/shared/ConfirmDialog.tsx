@@ -8,23 +8,69 @@ interface ConfirmDialogProps {
 
 export function ConfirmDialog({ title, message, confirmLabel = 'Delete', onConfirm, onCancel }: ConfirmDialogProps) {
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60" onClick={onCancel}>
+    // Depth blur backdrop (#21) — content behind darkens and blurs like real frosted glass
+    <div
+      className="fixed inset-0 z-[90] flex items-center justify-center modal-backdrop"
+      style={{ background: 'rgba(4, 5, 12, 0.55)' }}
+      onClick={onCancel}
+    >
       <div
-        className="bg-[#1e1e1e] border border-[#333] rounded-xl p-6 w-full max-w-sm shadow-2xl"
+        style={{
+          background: 'rgba(11, 12, 22, 0.82)',
+          backdropFilter: 'blur(48px) saturate(220%) brightness(1.12)',
+          WebkitBackdropFilter: 'blur(48px) saturate(220%) brightness(1.12)',
+          border: '1px solid rgba(255, 255, 255, 0.11)',
+          borderRadius: '18px',
+          padding: '24px',
+          width: '100%',
+          maxWidth: '360px',
+          boxShadow:
+            '0 24px 64px rgba(0, 0, 0, 0.65), 0 8px 24px rgba(0, 0, 0, 0.40), inset 0 1px 0 rgba(255, 255, 255, 0.10)',
+          animation: 'modalSlideUp 0.25s cubic-bezier(0.22, 1, 0.36, 1)',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-semibold text-[#e5e5e5] mb-2">{title}</h3>
-        <p className="text-sm text-[#888] mb-6">{message}</p>
-        <div className="flex justify-end gap-3">
+        <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#e4e6f2', marginBottom: '8px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+          {title}
+        </h3>
+        <p style={{ fontSize: '13px', color: 'rgba(110, 115, 134, 0.85)', marginBottom: '24px', fontFamily: 'system-ui, -apple-system, sans-serif', lineHeight: 1.5 }}>
+          {message}
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-sm text-[#888] hover:text-[#e5e5e5] rounded-lg transition-colors"
+            style={{
+              padding: '9px 18px',
+              fontSize: '13px',
+              color: 'rgba(228, 230, 242, 0.60)',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.09)',
+              borderRadius: '10px',
+              cursor: 'pointer',
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+              transition: 'all 0.15s ease',
+              minHeight: '44px',
+              minWidth: '44px',
+            }}
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 text-sm bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg font-medium transition-colors"
+            style={{
+              padding: '9px 18px',
+              fontSize: '13px',
+              fontWeight: 500,
+              color: '#fca5a5',
+              background: 'rgba(239, 68, 68, 0.18)',
+              border: '1px solid rgba(239, 68, 68, 0.30)',
+              borderRadius: '10px',
+              cursor: 'pointer',
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+              transition: 'all 0.15s ease',
+              minHeight: '44px',
+              minWidth: '44px',
+            }}
           >
             {confirmLabel}
           </button>
