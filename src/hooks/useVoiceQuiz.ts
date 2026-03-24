@@ -252,6 +252,7 @@ export function useVoiceQuiz() {
         imageDescription: state.imageDescription,
         crossNodeContext: state.crossNodeContext,
         emptyFields: state.emptyFields,
+        addressedFields: [],
         messages: state.messages,
         lastAnswerWasConfused: state.lastQuestionWasConfused,
       });

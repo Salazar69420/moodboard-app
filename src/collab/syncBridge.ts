@@ -16,6 +16,7 @@ import {
     getTextNodesMap,
     getPromptNodesMap,
     getConnectionsMap,
+    getDocumentNodesMap,
     getYDoc,
     getProvider,
 } from './yjsProvider';
@@ -29,6 +30,7 @@ import type {
     TextNode,
     PromptNode,
     Connection,
+    DocumentNode,
 } from '../types';
 
 let _isRemote = false;
@@ -78,6 +80,12 @@ export function pushAllLocalState() {
         // Connections
         if (connMap) {
             for (const c of boardState.connections) connMap.set(c.id, { ...c });
+        }
+
+        // Document nodes
+        const docMap = getDocumentNodesMap();
+        if (docMap) {
+            for (const n of boardState.documentNodes) docMap.set(n.id, { ...n });
         }
     });
 
@@ -174,6 +182,18 @@ export function pullAllFromYjs() {
             });
         }
 
+        const docNodesMap = getDocumentNodesMap();
+        if (docNodesMap) {
+            const store = useBoardStore.getState();
+            docNodesMap.forEach((data: DocumentNode) => {
+                if (data && data.id) store.upsertDocumentNodeFromRemote(data);
+            });
+            const remoteIds = new Set(docNodesMap.keys());
+            store.documentNodes.forEach(node => {
+                if (!remoteIds.has(node.id)) store.removeDocumentNodeFromRemote(node.id);
+            });
+        }
+
     } finally {
         _isRemote = false;
     }
@@ -238,6 +258,7 @@ export function startStoreSubscriptions() {
                 syncArrayToYMap(prevState.textNodes, state.textNodes, getTextNodesMap());
                 syncArrayToYMap(prevState.promptNodes, state.promptNodes, getPromptNodesMap());
                 syncArrayToYMap(prevState.connections, state.connections, getConnectionsMap());
+                syncArrayToYMap(prevState.documentNodes, state.documentNodes, getDocumentNodesMap());
             });
         })
     );

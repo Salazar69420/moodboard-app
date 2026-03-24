@@ -39,6 +39,8 @@ export function BoardHeader() {
   const promptNodes = useBoardStore((s) => s.promptNodes);
   const addGodModeNode = useBoardStore((s) => s.addGodModeNode);
   const godModeNodes = useBoardStore((s) => s.godModeNodes);
+  const addDocumentNode = useBoardStore((s) => s.addDocumentNode);
+  const documentNodes = useBoardStore((s) => s.documentNodes);
   const boardMode = useBoardStore((s) => s.boardMode);
   const setBoardMode = useBoardStore((s) => s.setBoardMode);
   const setSearchOpen = useUIStore((s) => s.setSearchOpen);
@@ -105,6 +107,11 @@ export function BoardHeader() {
     if (!currentProjectId) return;
     // Place in a sensible default spot on canvas
     await addGodModeNode(currentProjectId, 120, 120);
+  };
+
+  const handleAddDocNode = async () => {
+    if (!currentProjectId) return;
+    await addDocumentNode(currentProjectId, 160, 160);
   };
 
   const handleAutoArrange = async () => {
@@ -520,6 +527,50 @@ export function BoardHeader() {
           <path d="M5 16L3 5l5.5 5L12 2l3.5 8L21 5l-2 11H5zm0 2h14v2H5v-2z"/>
         </svg>
         <span>God Mode</span>
+      </button>
+
+      {/* Doc button */}
+      <button
+        onClick={handleAddDocNode}
+        title="Add document brief node — injects context into every AI call (Ctrl+D)"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 5,
+          padding: IS_TOUCH ? '8px 10px' : '4px 10px',
+          borderRadius: '8px',
+          fontSize: '11px',
+          fontFamily: "'Inter', system-ui, sans-serif",
+          fontWeight: 500,
+          background: documentNodes.some(d => d.content.trim()) ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.04)',
+          border: `1px solid ${documentNodes.some(d => d.content.trim()) ? 'rgba(59,130,246,0.35)' : 'rgba(255,255,255,0.08)'}`,
+          color: documentNodes.some(d => d.content.trim()) ? '#60a5fa' : '#888',
+          cursor: 'pointer',
+          transition: 'all 0.15s ease',
+          backdropFilter: 'blur(8px)',
+          touchAction: 'manipulation',
+          flexShrink: 0,
+        }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLElement).style.background = 'rgba(59,130,246,0.12)';
+          (e.currentTarget as HTMLElement).style.borderColor = 'rgba(59,130,246,0.35)';
+          (e.currentTarget as HTMLElement).style.color = '#60a5fa';
+        }}
+        onMouseLeave={e => {
+          const active = documentNodes.some(d => d.content.trim());
+          (e.currentTarget as HTMLElement).style.background = active ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.04)';
+          (e.currentTarget as HTMLElement).style.borderColor = active ? 'rgba(59,130,246,0.35)' : 'rgba(255,255,255,0.08)';
+          (e.currentTarget as HTMLElement).style.color = active ? '#60a5fa' : '#888';
+        }}
+      >
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+          <polyline points="10 9 9 9 8 9"/>
+        </svg>
+        <span>Doc</span>
       </button>
 
       {/* Mode Toggle */}

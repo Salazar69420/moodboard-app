@@ -1,7 +1,9 @@
 import { create } from 'zustand';
-import type { Connection, TextNode, CategoryNote, ShotCategoryId, EditNote, EditCategoryId, PromptNode, GodModeNode } from '../types';
+import type { Connection, TextNode, CategoryNote, ShotCategoryId, EditNote, EditCategoryId, PromptNode, GodModeNode, DocumentNode, EvalResult } from '../types';
 import { getDB } from '../utils/db';
 import { nanoid } from 'nanoid';
+import { getDocumentNodesByProject, storeDocumentNode, deleteDocumentNode } from '../utils/db-operations';
+import { useImageStore } from './useImageStore';
 
 interface BoardStore {
     connections: Connection[];
@@ -88,6 +90,18 @@ interface BoardStore {
     updateGodModeNode: (id: string, updates: Partial<GodModeNode>) => Promise<void>;
     removeGodModeNode: (id: string) => Promise<void>;
 
+    // ── Document Nodes ──
+    documentNodes: DocumentNode[];
+    addDocumentNode: (projectId: string, x: number, y: number, title?: string, content?: string) => Promise<string>;
+    updateDocumentNode: (id: string, updates: Partial<DocumentNode>) => Promise<void>;
+    removeDocumentNode: (id: string) => Promise<void>;
+    upsertDocumentNodeFromRemote: (node: DocumentNode) => void;
+    removeDocumentNodeFromRemote: (id: string) => void;
+
+    // ── Image Evaluation ──
+    updateImageEvaluation: (imageId: string, evaluation: 'accepted' | 'rejected' | null, critique?: string) => Promise<void>;
+    updatePromptNodeEval: (id: string, evalResult: EvalResult) => Promise<void>;
+
     // ── Move ──
     moveNotesToProject: (imageId: string, targetProjectId: string) => Promise<void>;
 
@@ -111,6 +125,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     editNotes: [],
     promptNodes: [],
     godModeNodes: [],
+    documentNodes: [],
     connectingFromId: null,
     boardMode: 'i2v',
 
@@ -126,7 +141,8 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
         const godModeNodesRaw = await db.getAllFromIndex('godModeNodes', 'by-project', projectId);
         // Backward compatibility: ensure connectedImageIds exists on old nodes
         const godModeNodes = godModeNodesRaw.map((g: any) => ({ ...g, connectedImageIds: g.connectedImageIds ?? [] }));
-        set({ connections, textNodes, categoryNotes, editNotes, promptNodes, godModeNodes, connectingFromId: null });
+        const documentNodes = await getDocumentNodesByProject(projectId);
+        set({ connections, textNodes, categoryNotes, editNotes, promptNodes, godModeNodes, documentNodes, connectingFromId: null });
     },
 
     startConnection: (fromId) => set({ connectingFromId: fromId }),
@@ -585,6 +601,74 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
         set(state => ({
             godModeNodes: state.godModeNodes.filter(n => n.id !== id)
         }));
+    },
+
+    // ─── Document Nodes ───────────────────────────────────────────────────
+
+    addDocumentNode: async (projectId, x, y, title = 'Brief', content = '') => {
+        const id = nanoid();
+        const node: DocumentNode = {
+            id,
+            projectId,
+            title,
+            content,
+            x,
+            y,
+            width: 320,
+            height: 200,
+            isMinimized: false,
+            createdAt: Date.now(),
+            sourceType: 'paste',
+        };
+        await storeDocumentNode(node);
+        set(state => ({ documentNodes: [...state.documentNodes, node] }));
+        return id;
+    },
+
+    updateDocumentNode: async (id, updates) => {
+        const node = get().documentNodes.find(n => n.id === id);
+        if (!node) return;
+        const updated = { ...node, ...updates };
+        await storeDocumentNode(updated);
+        set(state => ({ documentNodes: state.documentNodes.map(n => n.id === id ? updated : n) }));
+    },
+
+    removeDocumentNode: async (id) => {
+        await deleteDocumentNode(id);
+        set(state => ({ documentNodes: state.documentNodes.filter(n => n.id !== id) }));
+    },
+
+    upsertDocumentNodeFromRemote: (node) => {
+        set(s => {
+            const exists = s.documentNodes.some(n => n.id === node.id);
+            return { documentNodes: exists ? s.documentNodes.map(n => n.id === node.id ? { ...n, ...node } : n) : [...s.documentNodes, node] };
+        });
+        storeDocumentNode(node).catch(() => {});
+    },
+
+    removeDocumentNodeFromRemote: (id) => {
+        set(s => ({ documentNodes: s.documentNodes.filter(n => n.id !== id) }));
+        deleteDocumentNode(id).catch(() => {});
+    },
+
+    // ─── Image Evaluation ─────────────────────────────────────────────────
+
+    updateImageEvaluation: async (imageId, evaluation, critique) => {
+        const imageStore = useImageStore.getState();
+        const image = imageStore.images.find(i => i.id === imageId);
+        if (!image) return;
+        const updates: Partial<import('../types').BoardImage> = { evaluation };
+        if (critique !== undefined) updates.evalCritique = critique;
+        await imageStore.updateImageFields(imageId, updates);
+    },
+
+    updatePromptNodeEval: async (id, evalResult) => {
+        const db = await getDB();
+        const node = await db.get('promptNodes', id);
+        if (!node) return;
+        const updated = { ...node, evalResult };
+        await db.put('promptNodes', updated);
+        set(state => ({ promptNodes: state.promptNodes.map(n => n.id === id ? updated : n) }));
     },
 
     autoArrangeNotes: async (images) => {

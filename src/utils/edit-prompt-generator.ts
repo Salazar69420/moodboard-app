@@ -1,6 +1,9 @@
-import type { EditNote, EditCategoryId, GodModeNode } from '../types';
+import type { EditNote, EditCategoryId, GodModeNode, EvalResult, PreferenceProfile } from '../types';
 import { EDIT_CATEGORIES } from '../types';
 import { getBlob } from './db-operations';
+import { evaluateOutput } from './eval-engine';
+import { serializeBoardContext } from './board-context';
+import { buildPreferenceBlock } from './preference-manager';
 
 const SYSTEM_PROMPT = `You are a precision prompt-writing assistant for AI image generators (Flux, Midjourney, DALL-E, Stable Diffusion, etc.).
 
@@ -84,6 +87,16 @@ export interface EditPromptResult {
   prompt: string;
   model: string;
   timestamp: number;
+  evalResult?: EvalResult;
+}
+
+export interface GenerateEditPromptOptions {
+  enableSelfEval?: boolean;
+  enableBoardContext?: boolean;
+  enablePreferences?: boolean;
+  projectId?: string;
+  preferenceProfile?: PreferenceProfile;
+  retryContext?: string;
 }
 
 export async function generateEditPrompt(
@@ -94,6 +107,7 @@ export async function generateEditPrompt(
   notes: EditNote[],
   connectedImages: import('../types').BoardImage[] = [],
   godModeNodes: GodModeNode[] = [],
+  options: GenerateEditPromptOptions = {},
 ): Promise<EditPromptResult> {
   let userMessage = buildUserMessage(notes, connectedImages);
 
@@ -103,6 +117,11 @@ export async function generateEditPrompt(
     for (const gn of activeGodNodes) {
       userMessage += `• ${gn.title ? `${gn.title}: ` : ''}${gn.text.trim()}\n`;
     }
+  }
+
+  if (options.enablePreferences && options.preferenceProfile) {
+    const prefBlock = buildPreferenceBlock(options.preferenceProfile);
+    if (prefBlock) userMessage += `\n\n${prefBlock}`;
   }
 
   const primaryImageBase64 = await imageToBase64(blobId);
@@ -115,11 +134,17 @@ export async function generateEditPrompt(
   );
   const validConnected = connectedBase64s.filter(c => c !== null) as { b64: string; mime: string; label?: string }[];
 
+  let systemPrompt = SYSTEM_PROMPT;
+  if (options.enableBoardContext && options.projectId) {
+    const boardCtx = serializeBoardContext(options.projectId);
+    if (boardCtx) systemPrompt += `\n\n${boardCtx}`;
+  }
+
   const messages: Array<{
     role: string;
     content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
   }> = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: systemPrompt },
   ];
 
   if (primaryImageBase64) {
@@ -171,5 +196,22 @@ export async function generateEditPrompt(
 
   if (!prompt) throw new Error('Empty response from model');
 
-  return { prompt, model, timestamp: Date.now() };
+  let evalResult: EvalResult | undefined;
+  if (options.enableSelfEval && primaryImageBase64) {
+    try {
+      const brief = buildUserMessage(notes, connectedImages);
+      evalResult = await evaluateOutput({
+        imageBase64: primaryImageBase64,
+        mimeType,
+        generatedText: prompt,
+        originalBrief: brief,
+        apiKey,
+        model,
+      });
+    } catch {
+      // Eval failure is non-blocking
+    }
+  }
+
+  return { prompt, model, timestamp: Date.now(), evalResult };
 }

@@ -1,6 +1,10 @@
-import type { CategoryNote, ShotCategoryId, GodModeNode } from '../types';
+import type { CategoryNote, ShotCategoryId, GodModeNode, EvalResult } from '../types';
 import { SHOT_CATEGORIES } from '../types';
 import { getBlob } from './db-operations';
+import { evaluateOutput, buildRetryContext } from './eval-engine';
+import { serializeBoardContext } from './board-context';
+import { buildPreferenceBlock } from './preference-manager';
+import type { PreferenceProfile } from '../types';
 
 const SYSTEM_PROMPT = `You are a precision prompt-writing assistant for AI filmmakers using I2V (image-to-video) generation tools.
 
@@ -78,6 +82,60 @@ export interface PromptResult {
   prompt: string;
   model: string;
   timestamp: number;
+  evalResult?: EvalResult;
+}
+
+export interface GeneratePromptOptions {
+  enableSelfEval?: boolean;
+  enableBoardContext?: boolean;
+  enablePreferences?: boolean;
+  projectId?: string;
+  preferenceProfile?: PreferenceProfile;
+  /** If set, this is a retry — inject prior eval critique */
+  retryContext?: string;
+}
+
+export async function generateThinkingTrace(
+  apiKey: string,
+  model: string,
+  notes: CategoryNote[],
+  signal?: AbortSignal,
+): Promise<string> {
+  const noteSummary = notes
+    .filter(n => n.text.trim())
+    .map(n => `${n.categoryId}: ${n.text.trim().slice(0, 60)}`)
+    .join(', ');
+
+  if (!noteSummary) return '';
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': window.location.origin,
+        'X-Title': 'Moodboard App',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'user',
+            content: `You are about to generate a cinematic I2V prompt. Given these shot notes:\n${noteSummary}\n\nIn 1-2 sentences, state the 2-3 most important visual elements you will focus on. Be brief and direct.`,
+          },
+        ],
+        temperature: 0,
+        max_tokens: 100,
+      }),
+      signal,
+    });
+    if (!response.ok) return '';
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content?.trim() || '';
+  } catch {
+    return '';
+  }
 }
 
 export async function generatePrompt(
@@ -88,6 +146,7 @@ export async function generatePrompt(
   notes: CategoryNote[],
   connectedImages: import('../types').BoardImage[] = [],
   godModeNodes: GodModeNode[] = [],
+  options: GeneratePromptOptions = {},
 ): Promise<PromptResult> {
   let userMessage = buildUserMessage(notes);
 
@@ -97,6 +156,17 @@ export async function generatePrompt(
     for (const gn of activeGodNodes) {
       userMessage += `• ${gn.title ? `${gn.title}: ` : ''}${gn.text.trim()}\n`;
     }
+  }
+
+  // Preference injection
+  if (options.enablePreferences && options.preferenceProfile) {
+    const prefBlock = buildPreferenceBlock(options.preferenceProfile);
+    if (prefBlock) userMessage += `\n\n${prefBlock}`;
+  }
+
+  // Retry context injection
+  if (options.retryContext) {
+    userMessage = buildRetryContext(userMessage, { status: 'fail', score: 0, critique: '', suggestion: options.retryContext, timestamp: 0 });
   }
 
   const primaryImageBase64 = await imageToBase64(blobId);
@@ -109,11 +179,18 @@ export async function generatePrompt(
   );
   const validConnected = connectedBase64s.filter(c => c !== null) as { b64: string; mime: string; label?: string }[];
 
+  // Board context injection into system prompt
+  let systemPrompt = SYSTEM_PROMPT;
+  if (options.enableBoardContext && options.projectId) {
+    const boardCtx = serializeBoardContext(options.projectId);
+    if (boardCtx) systemPrompt += `\n\n${boardCtx}`;
+  }
+
   const messages: Array<{
     role: string;
     content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
   }> = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: systemPrompt },
   ];
 
   if (primaryImageBase64) {
@@ -165,5 +242,23 @@ export async function generatePrompt(
 
   if (!prompt) throw new Error('Empty response from model');
 
-  return { prompt, model, timestamp: Date.now() };
+  // Self-evaluation
+  let evalResult: EvalResult | undefined;
+  if (options.enableSelfEval && primaryImageBase64) {
+    try {
+      const brief = buildUserMessage(notes);
+      evalResult = await evaluateOutput({
+        imageBase64: primaryImageBase64,
+        mimeType,
+        generatedText: prompt,
+        originalBrief: brief,
+        apiKey,
+        model,
+      });
+    } catch {
+      // Eval failure is non-blocking
+    }
+  }
+
+  return { prompt, model, timestamp: Date.now(), evalResult };
 }

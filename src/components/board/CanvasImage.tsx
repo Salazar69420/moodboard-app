@@ -12,6 +12,7 @@ import { EditPromptGenerator } from './EditPromptGenerator';
 import { FloatingToolbar } from './FloatingToolbar';
 import { InlineCropOverlay } from './CropModal';
 
+
 interface CanvasImageProps {
   image: BoardImage;
   zoomScale: number;
@@ -23,6 +24,53 @@ const LONG_PRESS_MS = 600;
 
 // Detect touch device once
 const IS_TOUCH = typeof window !== 'undefined' && navigator.maxTouchPoints > 0;
+
+// Small inline evaluation badge for accepted/rejected images
+function EvalImageBadge({ evaluation, critique }: { evaluation: 'accepted' | 'rejected'; critique?: string }) {
+  const [show, setShow] = useState(false);
+  const isAccepted = evaluation === 'accepted';
+  const color = isAccepted ? '#4ade80' : '#f87171';
+  const glow = isAccepted ? 'rgba(74,222,128,0.5)' : 'rgba(248,113,113,0.5)';
+  return (
+    <div
+      style={{ position: 'relative', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+      onPointerEnter={() => setShow(true)}
+      onPointerLeave={() => setShow(false)}
+    >
+      <div style={{
+        width: 16, height: 16, borderRadius: '50%',
+        background: `${color}22`, border: `1.5px solid ${color}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 9, fontWeight: 800, color,
+        boxShadow: show ? `0 0 8px ${glow}` : 'none',
+        cursor: 'default', transition: 'box-shadow 0.15s ease',
+        userSelect: 'none',
+      }}>
+        {isAccepted ? '✓' : '✗'}
+      </div>
+      {show && (
+        <div style={{
+          position: 'absolute', bottom: '100%', right: 0, marginBottom: 6,
+          background: 'rgba(7,8,14,0.97)', backdropFilter: 'blur(20px)',
+          border: `1px solid ${color}44`, borderRadius: 10,
+          padding: '7px 11px', fontSize: 10,
+          fontFamily: "'Inter', system-ui, sans-serif",
+          color: 'rgba(226,228,240,0.9)', minWidth: 140, maxWidth: 220,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.7)',
+          zIndex: 200, whiteSpace: 'normal', pointerEvents: 'none',
+          animation: 'tooltipFadeIn 0.15s ease forwards',
+        }}>
+          <div style={{ fontWeight: 700, color, marginBottom: critique ? 4 : 0, fontSize: 11 }}>
+            {isAccepted ? '✓ Accepted' : '✗ Rejected'}
+          </div>
+          {critique && !isAccepted && (
+            <div style={{ color: 'rgba(226,228,240,0.65)', fontSize: 9 }}>{critique}</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Accent color palette for note theming
 const ACCENT_COLORS = [
@@ -945,6 +993,11 @@ export const CanvasImage = memo(function CanvasImage({ image, zoomScale }: Canva
                 </div>
               )}
             </div>
+          )}
+
+          {/* Evaluation badge — accepted/rejected marker */}
+          {image.evaluation && (
+            <EvalImageBadge evaluation={image.evaluation} critique={image.evalCritique} />
           )}
         </div>
       )}

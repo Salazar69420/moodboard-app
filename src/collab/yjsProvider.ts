@@ -44,6 +44,9 @@ export function getPromptNodesMap(): Y.Map<any> | null {
 export function getConnectionsMap(): Y.Map<any> | null {
     return ydoc?.getMap('connections') ?? null;
 }
+export function getDocumentNodesMap(): Y.Map<any> | null {
+    return ydoc?.getMap('documentNodes') ?? null;
+}
 
 export function startSession(roomId: string, projectId: string): Y.Doc {
     // Clean up any previous session

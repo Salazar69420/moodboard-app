@@ -5,6 +5,8 @@ import { useImageStore } from '../../stores/useImageStore';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import { generatePrompt } from '../../utils/prompt-generator';
 import { generateEditPrompt } from '../../utils/edit-prompt-generator';
+import { buildRetryContext } from '../../utils/eval-engine';
+import { EvalBadge } from './EvalBadge';
 import type { GodModeNode } from '../../types';
 
 interface Props {
@@ -26,6 +28,7 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
     const removePromptNode = useBoardStore((s) => s.removePromptNode);
     const regeneratePromptNode = useBoardStore((s) => s.regeneratePromptNode);
     const restorePromptVersion = useBoardStore((s) => s.restorePromptVersion);
+    const updatePromptNodeEval = useBoardStore((s) => s.updatePromptNodeEval);
     const boardMode = useBoardStore((s) => s.boardMode);
     const categoryNotes = useBoardStore((s) => s.categoryNotes);
     const editNotes = useBoardStore((s) => s.editNotes);
@@ -136,18 +139,16 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
     }, [node.text]);
 
     // ─── Regeneration ─────────────────────────────────────────────────
-    const handleRegenerate = useCallback(async (e: React.MouseEvent) => {
+    const handleRegenerate = useCallback(async (e: React.MouseEvent, withRetryContext = false) => {
         e.stopPropagation();
         if (!apiKey || isRegenerating) return;
 
         setIsRegenerating(true);
 
         try {
-            // Find the parent image
             const parentImage = images.find(img => img.id === node.imageId);
             if (!parentImage) throw new Error('Image not found');
 
-            // Find connected images
             const connectedImageIds = connections
                 .filter(c => c.fromId === node.imageId || c.toId === node.imageId)
                 .map(c => c.fromId === node.imageId ? c.toId : c.fromId);
@@ -155,27 +156,35 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
 
             let newText: string;
             let newModel: string;
+            let evalResult;
 
             const activeGodNodes = godModeNodes.filter((g: GodModeNode) => g.isEnabled && g.text.trim());
+            const retryCtx = withRetryContext && node.evalResult
+                ? buildRetryContext(node.text, node.evalResult)
+                : undefined;
+
             if (node.promptType === 'i2v') {
                 const notes = categoryNotes.filter(n => n.imageId === node.imageId);
-                const result = await generatePrompt(apiKey, model, parentImage.blobId, parentImage.mimeType, notes, connectedImages, activeGodNodes);
+                const result = await generatePrompt(apiKey, model, parentImage.blobId, parentImage.mimeType, notes, connectedImages, activeGodNodes, { retryContext: retryCtx });
                 newText = result.prompt;
                 newModel = result.model;
+                evalResult = result.evalResult;
             } else {
                 const notes = editNotes.filter(n => n.imageId === node.imageId);
-                const result = await generateEditPrompt(apiKey, model, parentImage.blobId, parentImage.mimeType, notes, connectedImages, activeGodNodes);
+                const result = await generateEditPrompt(apiKey, model, parentImage.blobId, parentImage.mimeType, notes, connectedImages, activeGodNodes, { retryContext: retryCtx });
                 newText = result.prompt;
                 newModel = result.model;
+                evalResult = result.evalResult;
             }
 
             await regeneratePromptNode(node.id, newText, newModel);
+            if (evalResult) await updatePromptNodeEval(node.id, evalResult);
         } catch (err) {
             console.error('Regeneration failed:', err);
         } finally {
             setIsRegenerating(false);
         }
-    }, [apiKey, model, node, images, connections, categoryNotes, editNotes, regeneratePromptNode, isRegenerating]);
+    }, [apiKey, model, node, images, connections, categoryNotes, editNotes, regeneratePromptNode, updatePromptNodeEval, isRegenerating]);
 
     const handleRestoreVersion = useCallback(async (e: React.MouseEvent, index: number) => {
         e.stopPropagation();
@@ -516,7 +525,39 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
                             </button>
                         )}
 
+                        {/* Eval badge */}
+                        <EvalBadge evalResult={node.evalResult} />
+
                         <span style={{ flex: 1 }} />
+
+                        {/* Retry with critique button */}
+                        {node.evalResult?.status === 'fail' && (
+                            <button
+                                onClick={(e) => handleRegenerate(e, true)}
+                                disabled={isRegenerating}
+                                title="Retry generation using eval critique as guidance"
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 4,
+                                    padding: '3px 8px', borderRadius: 5,
+                                    border: '1px solid rgba(248,113,113,0.25)',
+                                    background: 'rgba(248,113,113,0.06)',
+                                    color: '#f87171', fontSize: 9,
+                                    fontFamily: "'JetBrains Mono', monospace",
+                                    cursor: isRegenerating ? 'not-allowed' : 'pointer',
+                                    transition: 'all 0.15s ease',
+                                }}
+                                onMouseEnter={(e) => {
+                                    (e.currentTarget as HTMLElement).style.background = 'rgba(248,113,113,0.14)';
+                                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(248,113,113,0.4)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    (e.currentTarget as HTMLElement).style.background = 'rgba(248,113,113,0.06)';
+                                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(248,113,113,0.25)';
+                                }}
+                            >
+                                ↺ Retry with critique
+                            </button>
+                        )}
 
                         <span style={{
                             fontSize: 9,

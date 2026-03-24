@@ -1,6 +1,7 @@
-import type { GodModeNode } from '../types';
+import type { GodModeNode, PreferenceProfile } from '../types';
 import { SHOT_CATEGORIES, EDIT_CATEGORIES } from '../types';
 import { getBlob } from './db-operations';
+import { buildPreferenceBlock } from './preference-manager';
 
 // ─── I2V JSON Structure ──────────────────────────────────────────────────────
 
@@ -91,6 +92,7 @@ export async function reverseEngineerI2V(
   mimeType: string,
   godModeNodes: GodModeNode[] = [],
   existingNotes?: Record<string, string>,
+  preferenceProfile?: PreferenceProfile,
 ): Promise<ReverseEngineerResult> {
   const imageBase64 = await imageToBase64(blobId);
   if (!imageBase64) throw new Error('Could not load image data');
@@ -144,6 +146,11 @@ ${I2V_JSON_SPEC}`;
     for (const gn of activeGodNodes) {
       systemPrompt += `• ${gn.title ? `${gn.title}: ` : ''}${gn.text.trim()}\n`;
     }
+  }
+
+  if (preferenceProfile) {
+    const prefBlock = buildPreferenceBlock(preferenceProfile);
+    if (prefBlock) systemPrompt += `\n\n${prefBlock}`;
   }
 
   const userText = hasDirectorContext
@@ -210,6 +217,7 @@ export async function reverseEngineerEdit(
   mimeType: string,
   godModeNodes: GodModeNode[] = [],
   existingNotes?: Record<string, string>,
+  preferenceProfile?: PreferenceProfile,
 ): Promise<ReverseEngineerResult> {
   const imageBase64 = await imageToBase64(blobId);
   if (!imageBase64) throw new Error('Could not load image data');
@@ -263,6 +271,11 @@ ${EDIT_JSON_SPEC}`;
     for (const gn of activeGodNodes) {
       systemPrompt += `• ${gn.title ? `${gn.title}: ` : ''}${gn.text.trim()}\n`;
     }
+  }
+
+  if (preferenceProfile) {
+    const prefBlock = buildPreferenceBlock(preferenceProfile);
+    if (prefBlock) systemPrompt += `\n\n${prefBlock}`;
   }
 
   const userText = hasDirectorContext

@@ -64,6 +64,15 @@ interface UIStore {
   setAutoLayout: (active: boolean) => void;
   toggleAutoLayout: () => void;
 
+  // Thinking trace (AI planning display)
+  thinkingTrace: string;
+  setThinkingTrace: (text: string) => void;
+  clearThinkingTrace: () => void;
+
+  // Batch generation progress
+  batchProgress: { current: number; total: number } | null;
+  setBatchProgress: (p: { current: number; total: number } | null) => void;
+
   selectImage: (id: string, multi?: boolean) => void;
   selectAllImages: (ids: string[]) => void;
   clearSelection: () => void;
@@ -141,6 +150,15 @@ export const useUIStore = create<UIStore>((set, get) => ({
   isAutoLayout: false,
   setAutoLayout: (active) => set({ isAutoLayout: active }),
   toggleAutoLayout: () => set((s) => ({ isAutoLayout: !s.isAutoLayout })),
+
+  // Thinking trace
+  thinkingTrace: '',
+  setThinkingTrace: (text) => set({ thinkingTrace: text }),
+  clearThinkingTrace: () => set({ thinkingTrace: '' }),
+
+  // Batch progress
+  batchProgress: null,
+  setBatchProgress: (p) => set({ batchProgress: p }),
 
   setActiveTool: (tool) => set({ activeTool: tool }),
 

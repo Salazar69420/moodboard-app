@@ -14,6 +14,11 @@ interface SettingsStore {
     customModels: ModelEntry[];
     showSettings: boolean;
 
+    // Agentic feature toggles
+    enableSelfEval: boolean;
+    enableBoardContext: boolean;
+    enablePreferences: boolean;
+
     setApiKey: (key: string) => void;
     setOpenAiApiKey: (key: string) => void;
     setModel: (model: string) => void;
@@ -21,11 +26,14 @@ interface SettingsStore {
     removeCustomModel: (id: string) => void;
     toggleSettings: () => void;
     closeSettings: () => void;
+    setEnableSelfEval: (v: boolean) => void;
+    setEnableBoardContext: (v: boolean) => void;
+    setEnablePreferences: (v: boolean) => void;
 }
 
 const STORAGE_KEY = 'moodboard-settings';
 
-function loadFromStorage(): { apiKey?: string; openAiApiKey?: string; model?: string; customModels?: ModelEntry[] } {
+function loadFromStorage(): { apiKey?: string; openAiApiKey?: string; model?: string; customModels?: ModelEntry[]; enableSelfEval?: boolean; enableBoardContext?: boolean; enablePreferences?: boolean } {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) return JSON.parse(raw);
@@ -33,7 +41,7 @@ function loadFromStorage(): { apiKey?: string; openAiApiKey?: string; model?: st
     return {};
 }
 
-function saveToStorage(data: { apiKey: string; openAiApiKey: string; model: string; customModels: ModelEntry[] }) {
+function saveToStorage(data: { apiKey: string; openAiApiKey: string; model: string; customModels: ModelEntry[]; enableSelfEval: boolean; enableBoardContext: boolean; enablePreferences: boolean }) {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch { /* ignore */ }
@@ -82,20 +90,26 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     model: stored.model || 'google/gemini-2.0-flash-001',
     customModels: stored.customModels || [],
     showSettings: false,
+    enableSelfEval: stored.enableSelfEval ?? true,
+    enableBoardContext: stored.enableBoardContext ?? false,
+    enablePreferences: stored.enablePreferences ?? true,
 
     setApiKey: (apiKey) => {
         set({ apiKey });
-        saveToStorage({ apiKey, openAiApiKey: get().openAiApiKey, model: get().model, customModels: get().customModels });
+        const s = get();
+        saveToStorage({ apiKey, openAiApiKey: s.openAiApiKey, model: s.model, customModels: s.customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
     },
 
     setOpenAiApiKey: (openAiApiKey) => {
         set({ openAiApiKey });
-        saveToStorage({ apiKey: get().apiKey, openAiApiKey, model: get().model, customModels: get().customModels });
+        const s = get();
+        saveToStorage({ apiKey: s.apiKey, openAiApiKey, model: s.model, customModels: s.customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
     },
 
     setModel: (model) => {
         set({ model });
-        saveToStorage({ apiKey: get().apiKey, openAiApiKey: get().openAiApiKey, model, customModels: get().customModels });
+        const s = get();
+        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, model, customModels: s.customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
     },
 
     addCustomModel: (id) => {
@@ -110,16 +124,36 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         const newModel: ModelEntry = { id: trimmed, label, provider, isCustom: true };
         const customModels = [...get().customModels, newModel];
         set({ customModels, model: trimmed });
-        saveToStorage({ apiKey: get().apiKey, openAiApiKey: get().openAiApiKey, model: trimmed, customModels });
+        const s = get();
+        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, model: trimmed, customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
     },
 
     removeCustomModel: (id) => {
         const customModels = get().customModels.filter(m => m.id !== id);
         const newModel = get().model === id ? DEFAULT_MODELS[0].id : get().model;
         set({ customModels, model: newModel });
-        saveToStorage({ apiKey: get().apiKey, openAiApiKey: get().openAiApiKey, model: newModel, customModels });
+        const s = get();
+        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, model: newModel, customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
     },
 
     toggleSettings: () => set(s => ({ showSettings: !s.showSettings })),
     closeSettings: () => set({ showSettings: false }),
+
+    setEnableSelfEval: (enableSelfEval) => {
+        set({ enableSelfEval });
+        const s = get();
+        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, model: s.model, customModels: s.customModels, enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
+    },
+
+    setEnableBoardContext: (enableBoardContext) => {
+        set({ enableBoardContext });
+        const s = get();
+        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, model: s.model, customModels: s.customModels, enableSelfEval: s.enableSelfEval, enableBoardContext, enablePreferences: s.enablePreferences });
+    },
+
+    setEnablePreferences: (enablePreferences) => {
+        set({ enablePreferences });
+        const s = get();
+        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, model: s.model, customModels: s.customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences });
+    },
 }));

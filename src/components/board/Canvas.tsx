@@ -12,6 +12,8 @@ import { CategoryNoteNode } from './CategoryNoteNode';
 import { EditNoteNode } from './EditNoteNode';
 import { PromptNodeComponent } from './PromptNodeComponent';
 import { GodModeNodeComponent } from './GodModeNodeComponent';
+import { DocumentNodeComponent } from './DocumentNodeComponent';
+import { BatchProgress } from './BatchProgress';
 import { useProjectStore } from '../../stores/useProjectStore';
 import { SHOT_CATEGORIES, EDIT_CATEGORIES } from '../../types';
 import { Minimap } from './Minimap';
@@ -45,6 +47,7 @@ export function Canvas() {
   const editNotes = useBoardStore((s) => s.editNotes);
   const promptNodes = useBoardStore((s) => s.promptNodes);
   const godModeNodes = useBoardStore((s) => s.godModeNodes);
+  const documentNodes = useBoardStore((s) => s.documentNodes);
   const connectingFromId = useBoardStore((s) => s.connectingFromId);
   const removeConnection = useBoardStore((s) => s.removeConnection);
   const updateConnectionLabel = useBoardStore((s) => s.updateConnectionLabel);
@@ -543,6 +546,13 @@ export function Canvas() {
             zoomScale={zoom}
           />
         ))}
+        {documentNodes.map((node) => (
+          <DocumentNodeComponent
+            key={node.id}
+            node={node}
+            zoomScale={zoom}
+          />
+        ))}
         {images.map((image) => (
           <div
             key={image.id}
@@ -575,6 +585,9 @@ export function Canvas() {
 
       {/* Session Recap (F5) */}
       {currentProjectId && <SessionRecap projectId={currentProjectId} />}
+
+      {/* Batch Progress */}
+      <BatchProgress />
 
       {/* Minimap */}
       {images.length > 0 && (

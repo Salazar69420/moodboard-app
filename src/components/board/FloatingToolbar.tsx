@@ -1,10 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import type { BoardImage } from '../../types';
 import { useBoardStore } from '../../stores/useBoardStore';
 import { useUIStore } from '../../stores/useUIStore';
 import { useProjectStore } from '../../stores/useProjectStore';
 import { useImageStore } from '../../stores/useImageStore';
+import { useSettingsStore } from '../../stores/useSettingsStore';
 import { SHOT_CATEGORIES, EDIT_CATEGORIES } from '../../types';
+import { generatePrompt } from '../../utils/prompt-generator';
+import { generateEditPrompt } from '../../utils/edit-prompt-generator';
 
 interface FloatingToolbarProps {
     image: BoardImage;
@@ -25,6 +28,20 @@ export function FloatingToolbar({ image, displayW, displayH }: FloatingToolbarPr
     const duplicateImage = useImageStore((s) => s.duplicateImage);
 
     const [showPicker, setShowPicker] = useState(false);
+    const [showRatePopover, setShowRatePopover] = useState(false);
+    const [showVariationsPopover, setShowVariationsPopover] = useState(false);
+    const [critiqueInput, setCritiqueInput] = useState('');
+    const [isBatchRunning, setIsBatchRunning] = useState(false);
+
+    const apiKey = useSettingsStore((s) => s.apiKey);
+    const model = useSettingsStore((s) => s.model);
+    const connections = useBoardStore((s) => s.connections);
+    const allImages = useImageStore((s) => s.images);
+    const godModeNodes = useBoardStore((s) => s.godModeNodes);
+    const promptNodes = useBoardStore((s) => s.promptNodes);
+    const addPromptNode = useBoardStore((s) => s.addPromptNode);
+    const updateImageEvaluation = useBoardStore((s) => s.updateImageEvaluation);
+    const setBatchProgress = useUIStore((s) => s.setBatchProgress);
 
     const existingCats = useMemo(
         () => new Set(categoryNotes.filter(n => n.imageId === image.id).map(n => n.categoryId)),
@@ -65,6 +82,61 @@ export function FloatingToolbar({ image, displayW, displayH }: FloatingToolbarPr
         const newId = await duplicateImage(image.id);
         if (newId) showToast('Image duplicated');
     };
+
+    const handleRate = useCallback(async (evaluation: 'accepted' | 'rejected') => {
+        if (!currentProjectId) return;
+        const critique = evaluation === 'rejected' && critiqueInput.trim() ? critiqueInput.trim() : undefined;
+        await updateImageEvaluation(image.id, evaluation, critique);
+        setCritiqueInput('');
+        setShowRatePopover(false);
+        showToast(evaluation === 'accepted' ? 'Marked as accepted' : 'Marked as rejected');
+    }, [currentProjectId, image.id, critiqueInput, updateImageEvaluation, showToast]);
+
+    const handleBatchGenerate = useCallback(async (count: 3 | 5) => {
+        if (!apiKey || !currentProjectId || isBatchRunning) return;
+        setShowVariationsPopover(false);
+        setIsBatchRunning(true);
+        setBatchProgress({ current: 0, total: count });
+
+        try {
+            const connectedImageIds = connections
+                .filter(c => c.fromId === image.id || c.toId === image.id)
+                .map(c => c.fromId === image.id ? c.toId : c.fromId);
+            const connectedImages = allImages.filter(img => connectedImageIds.includes(img.id));
+            const activeGodNodes = godModeNodes.filter(g => g.isEnabled && g.text.trim());
+
+            const existingNodes = promptNodes.filter(n => n.imageId === image.id && n.promptType === boardMode);
+            const baseX = image.x + displayW + 60;
+            const baseY = image.y + (existingNodes.length * 180);
+
+            const tasks = Array.from({ length: count }, async (_, i) => {
+                let text: string;
+                let mdl: string;
+                if (boardMode === 'i2v') {
+                    const notes = categoryNotes.filter(n => n.imageId === image.id);
+                    const result = await generatePrompt(apiKey, model, image.blobId, image.mimeType, notes, connectedImages, activeGodNodes);
+                    text = result.prompt;
+                    mdl = result.model;
+                } else {
+                    const notes = editNotes.filter(n => n.imageId === image.id);
+                    const result = await generateEditPrompt(apiKey, model, image.blobId, image.mimeType, notes, connectedImages, activeGodNodes);
+                    text = result.prompt;
+                    mdl = result.model;
+                }
+                await addPromptNode(currentProjectId, image.id, text, mdl, boardMode, baseX, baseY + i * 180);
+                setBatchProgress({ current: i + 1, total: count });
+            });
+
+            await Promise.all(tasks);
+            showToast(`${count} variations generated`);
+        } catch (err) {
+            console.error('Batch generation failed:', err);
+            showToast('Batch generation failed');
+        } finally {
+            setIsBatchRunning(false);
+            setBatchProgress(null);
+        }
+    }, [apiKey, currentProjectId, isBatchRunning, image, boardMode, displayW, connections, allImages, godModeNodes, categoryNotes, editNotes, promptNodes, addPromptNode, model, setBatchProgress, showToast]);
 
     const quickCats = boardMode === 'i2v'
         ? SHOT_CATEGORIES.filter(c => ['subject', 'action', 'camera'].includes(c.id))
@@ -131,6 +203,104 @@ export function FloatingToolbar({ image, displayW, displayH }: FloatingToolbarPr
                     icon={<span>🔗</span>}
                     label="Connect"
                 />
+
+                {/* Variations button */}
+                <div style={{ position: 'relative' }}>
+                    <ToolbarBtn
+                        onClick={() => { setShowVariationsPopover(v => !v); setShowRatePopover(false); }}
+                        title="Generate multiple prompt variations"
+                        icon={<span style={{ fontSize: 12 }}>⚡</span>}
+                        label="Variations"
+                        active={showVariationsPopover || isBatchRunning}
+                        disabled={!apiKey || isBatchRunning}
+                    />
+                    {showVariationsPopover && (
+                        <div style={{
+                            position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
+                            marginBottom: 6, background: 'rgba(15,15,18,0.96)', backdropFilter: 'blur(24px)',
+                            border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10,
+                            padding: '8px 6px', display: 'flex', flexDirection: 'column', gap: 4,
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.6)', zIndex: 50, whiteSpace: 'nowrap',
+                            animation: 'fadeSlideDown 0.12s ease',
+                        }}>
+                            <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', textAlign: 'center', fontFamily: "'Inter', system-ui, sans-serif", letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 2 }}>
+                                Variations
+                            </div>
+                            {([3, 5] as const).map(n => (
+                                <button key={n} onClick={() => handleBatchGenerate(n)} style={{
+                                    padding: '5px 14px', borderRadius: 6, border: '1px solid rgba(249,115,22,0.25)',
+                                    background: 'rgba(249,115,22,0.07)', color: '#fb923c', fontSize: 11,
+                                    fontFamily: "'Inter', system-ui, sans-serif", cursor: 'pointer',
+                                    transition: 'all 0.12s ease',
+                                }} onMouseEnter={(e) => {
+                                    (e.currentTarget as HTMLElement).style.background = 'rgba(249,115,22,0.18)';
+                                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(249,115,22,0.4)';
+                                }} onMouseLeave={(e) => {
+                                    (e.currentTarget as HTMLElement).style.background = 'rgba(249,115,22,0.07)';
+                                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(249,115,22,0.25)';
+                                }}>
+                                    {n} variations
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Rate button */}
+                <div style={{ position: 'relative' }}>
+                    <ToolbarBtn
+                        onClick={() => { setShowRatePopover(v => !v); setShowVariationsPopover(false); }}
+                        title="Accept or reject this image"
+                        icon={
+                            image.evaluation === 'accepted' ? <span style={{ fontSize: 11, color: '#4ade80' }}>👍</span>
+                            : image.evaluation === 'rejected' ? <span style={{ fontSize: 11, color: '#f87171' }}>👎</span>
+                            : <span style={{ fontSize: 11 }}>👍</span>
+                        }
+                        label="Rate"
+                        active={showRatePopover}
+                    />
+                    {showRatePopover && (
+                        <div style={{
+                            position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
+                            marginBottom: 6, background: 'rgba(15,15,18,0.96)', backdropFilter: 'blur(24px)',
+                            border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12,
+                            padding: '10px 10px 8px', display: 'flex', flexDirection: 'column', gap: 6,
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.6)', zIndex: 50, minWidth: 170,
+                            animation: 'fadeSlideDown 0.12s ease',
+                        }}>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                                <button onClick={() => handleRate('accepted')} style={{
+                                    flex: 1, padding: '6px 0', borderRadius: 7,
+                                    border: '1px solid rgba(74,222,128,0.3)', background: image.evaluation === 'accepted' ? 'rgba(74,222,128,0.15)' : 'rgba(74,222,128,0.05)',
+                                    color: '#4ade80', fontSize: 13, cursor: 'pointer', transition: 'all 0.12s ease',
+                                }} onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(74,222,128,0.18)'; }}
+                                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = image.evaluation === 'accepted' ? 'rgba(74,222,128,0.15)' : 'rgba(74,222,128,0.05)'; }}>
+                                    👍
+                                </button>
+                                <button onClick={() => handleRate('rejected')} style={{
+                                    flex: 1, padding: '6px 0', borderRadius: 7,
+                                    border: '1px solid rgba(248,113,113,0.3)', background: image.evaluation === 'rejected' ? 'rgba(248,113,113,0.15)' : 'rgba(248,113,113,0.05)',
+                                    color: '#f87171', fontSize: 13, cursor: 'pointer', transition: 'all 0.12s ease',
+                                }} onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(248,113,113,0.18)'; }}
+                                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = image.evaluation === 'rejected' ? 'rgba(248,113,113,0.15)' : 'rgba(248,113,113,0.05)'; }}>
+                                    👎
+                                </button>
+                            </div>
+                            <input
+                                value={critiqueInput}
+                                onChange={(e) => setCritiqueInput(e.target.value)}
+                                onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') handleRate('rejected'); }}
+                                placeholder="Note (optional)…"
+                                style={{
+                                    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                                    borderRadius: 6, padding: '5px 8px', fontSize: 10, color: 'rgba(255,255,255,0.6)',
+                                    fontFamily: "'Inter', system-ui, sans-serif", outline: 'none',
+                                }}
+                            />
+                        </div>
+                    )}
+                </div>
+
                 <ToolbarBtn
                     onClick={handleDuplicate}
                     title="Duplicate image + notes (Cmd+D)"

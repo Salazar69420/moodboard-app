@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { Project, BoardImage, ImageBlob, Connection, TextNode, CategoryNote, EditNote, PromptNode, GodModeNode } from '../types';
+import type { Project, BoardImage, ImageBlob, Connection, TextNode, CategoryNote, EditNote, PromptNode, GodModeNode, DocumentNode, PreferenceProfile } from '../types';
 
 interface MoodboardDB extends DBSchema {
   projects: {
@@ -55,10 +55,20 @@ interface MoodboardDB extends DBSchema {
     value: GodModeNode;
     indexes: { 'by-project': string };
   };
+  documentNodes: {
+    key: string;
+    value: DocumentNode;
+    indexes: { 'by-project': string };
+  };
+  preferences: {
+    key: string;
+    value: PreferenceProfile;
+    indexes: { 'by-project': string };
+  };
 }
 
 const DB_NAME = 'moodboard-db';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 
 let dbInstance: IDBPDatabase<MoodboardDB> | null = null;
 
@@ -106,6 +116,14 @@ export async function getDB(): Promise<IDBPDatabase<MoodboardDB>> {
       if (oldVersion < 6) {
         const godStore = db.createObjectStore('godModeNodes', { keyPath: 'id' });
         godStore.createIndex('by-project', 'projectId');
+      }
+
+      if (oldVersion < 7) {
+        const docStore = db.createObjectStore('documentNodes', { keyPath: 'id' });
+        docStore.createIndex('by-project', 'projectId');
+
+        const prefStore = db.createObjectStore('preferences', { keyPath: 'id' });
+        prefStore.createIndex('by-project', 'projectId');
       }
     },
   });

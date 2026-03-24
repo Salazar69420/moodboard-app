@@ -3,9 +3,10 @@ import { createPortal } from 'react-dom';
 import type { BoardImage, CategoryNote } from '../../types';
 import { SHOT_CATEGORIES } from '../../types';
 import { useSettingsStore } from '../../stores/useSettingsStore';
-import { generatePrompt, type PromptResult } from '../../utils/prompt-generator';
+import { generatePrompt, generateThinkingTrace, type PromptResult } from '../../utils/prompt-generator';
 import { useBoardStore } from '../../stores/useBoardStore';
 import { useProjectStore } from '../../stores/useProjectStore';
+import { useUIStore } from '../../stores/useUIStore';
 
 interface Props {
     image: BoardImage;
@@ -21,12 +22,17 @@ export function PromptGenerator({ image, notes, connectedImages = [] }: Props) {
     const godModeNodes = useBoardStore((s) => s.godModeNodes);
     const currentProjectId = useProjectStore((s) => s.currentProjectId);
 
+    const updatePromptNodeEval = useBoardStore((s) => s.updatePromptNodeEval);
+    const setBatchProgress = useUIStore((s) => s.setBatchProgress);
+
     const [showConfirm, setShowConfirm] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [result, setResult] = useState<PromptResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
+    const [batchCount, setBatchCount] = useState<1 | 3 | 5>(1);
+    const [thinkingText, setThinkingText] = useState<string | null>(null);
 
     const filledCats = new Set(notes.map(n => n.categoryId));
     const missingCount = SHOT_CATEGORIES.length - filledCats.size;
@@ -49,29 +55,54 @@ export function PromptGenerator({ image, notes, connectedImages = [] }: Props) {
         setIsGenerating(true);
         setError(null);
         setResult(null);
+        setThinkingText(null);
 
         try {
-            const res = await generatePrompt(apiKey, model, image.blobId, image.mimeType, notes, connectedImages, godModeNodes);
-            setResult(res);
-            // Persist as a canvas node
-            if (currentProjectId) {
+            // Thinking trace (non-blocking, best effort)
+            if (notes.length > 0) {
+                try {
+                    const trace = await generateThinkingTrace(apiKey, model, notes);
+                    setThinkingText(trace);
+                } catch { /* ignore trace errors */ }
+            }
+
+            if (batchCount === 1) {
+                const res = await generatePrompt(apiKey, model, image.blobId, image.mimeType, notes, connectedImages, godModeNodes);
+                setResult(res);
+                if (currentProjectId) {
+                    const displayW = image.displayWidth ?? Math.min(image.width, 350);
+                    const nodeId = await addPromptNode(
+                        currentProjectId, image.id, res.prompt, res.model, 'i2v',
+                        image.x + displayW + 24, image.y + 200,
+                    );
+                    if (res.evalResult && nodeId) await updatePromptNodeEval(nodeId, res.evalResult);
+                }
+            } else {
+                setBatchProgress({ current: 0, total: batchCount });
                 const displayW = image.displayWidth ?? Math.min(image.width, 350);
-                await addPromptNode(
-                    currentProjectId,
-                    image.id,
-                    res.prompt,
-                    res.model,
-                    'i2v',
-                    image.x + displayW + 24,
-                    image.y + 200,
-                );
+                const tasks = Array.from({ length: batchCount }, async (_, i) => {
+                    const res = await generatePrompt(apiKey, model, image.blobId, image.mimeType, notes, connectedImages, godModeNodes);
+                    if (currentProjectId) {
+                        const nodeId = await addPromptNode(
+                            currentProjectId, image.id, res.prompt, res.model, 'i2v',
+                            image.x + displayW + 24 + (i * 10), image.y + 200 + (i * 180),
+                        );
+                        if (res.evalResult && nodeId) await updatePromptNodeEval(nodeId, res.evalResult);
+                    }
+                    setBatchProgress({ current: i + 1, total: batchCount });
+                    return res;
+                });
+                const results = await Promise.all(tasks);
+                setResult(results[0]);
+                setBatchProgress(null);
             }
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Generation failed');
+            setBatchProgress(null);
         } finally {
             setIsGenerating(false);
         }
-    }, [apiKey, model, image, notes, connectedImages, godModeNodes, addPromptNode, currentProjectId]);
+    }, [apiKey, model, image, notes, connectedImages, godModeNodes, addPromptNode, updatePromptNodeEval, currentProjectId, batchCount, setBatchProgress]);
 
     const handleCopy = useCallback(async () => {
         if (!result) return;
@@ -178,6 +209,21 @@ export function PromptGenerator({ image, notes, connectedImages = [] }: Props) {
                 </button>
             </div>
 
+            {/* Thinking trace — shown while generating */}
+            {isGenerating && thinkingText && (
+                <div style={{
+                    marginTop: 6, padding: '7px 10px', borderRadius: 8,
+                    background: 'rgba(249,115,22,0.05)', border: '1px solid rgba(249,115,22,0.15)',
+                    fontSize: 10, fontFamily: "'Inter', system-ui, sans-serif",
+                    color: 'rgba(249,115,22,0.7)', lineHeight: 1.5,
+                }}>
+                    <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3, opacity: 0.6 }}>
+                        Planning
+                    </div>
+                    {thinkingText}
+                </div>
+            )}
+
             {/* Confirmation Modal */}
             {showConfirm && createPortal(
                 <div
@@ -280,6 +326,24 @@ export function PromptGenerator({ image, notes, connectedImages = [] }: Props) {
                                     >
                                         {cat.icon} {cat.label}
                                     </span>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Batch count selector */}
+                        <div style={{ padding: '0 20px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 11, color: '#666', fontFamily: "'Inter', system-ui, sans-serif" }}>Variations:</span>
+                            <div style={{ display: 'flex', background: '#1a1a1a', borderRadius: 7, border: '1px solid #2a2a2a', overflow: 'hidden' }}>
+                                {([1, 3, 5] as const).map(n => (
+                                    <button key={n} onClick={() => setBatchCount(n)} style={{
+                                        padding: '4px 12px', border: 'none', background: batchCount === n ? 'rgba(249,115,22,0.15)' : 'transparent',
+                                        color: batchCount === n ? '#f97316' : '#666', fontSize: 12,
+                                        fontFamily: "'Inter', system-ui, sans-serif", fontWeight: batchCount === n ? 600 : 400,
+                                        cursor: 'pointer', transition: 'all 0.12s ease',
+                                        borderRight: n !== 5 ? '1px solid #2a2a2a' : 'none',
+                                    }}>
+                                        {n}
+                                    </button>
                                 ))}
                             </div>
                         </div>

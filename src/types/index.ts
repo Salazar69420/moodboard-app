@@ -32,6 +32,8 @@ export interface BoardImage {
   duration?: number; // seconds, for videos
   accentColor?: string; // per-image accent for note theming
   shotOrder?: number;   // ordering in shot sequence panel
+  evaluation?: 'accepted' | 'rejected' | null; // user rating
+  evalCritique?: string; // user-written rejection note
 }
 
 export interface ImageBlob {
@@ -377,6 +379,8 @@ export interface PromptNode {
   isMinimized: boolean;
   createdAt: number;
   history?: PromptVersion[]; // last 3 versions (most recent first)
+  evalResult?: EvalResult;   // self-evaluation result
+  retryCount?: number;       // auto-retry counter (max 2)
 }
 
 // ─── Scene Groups ─────────────────────────────────────────────────────────────
@@ -1238,6 +1242,45 @@ export const EDIT_DIRECTOR_GUIDES: Record<string, DirectorGuide> = {
     ],
   },
 };
+
+// ─── Self-Evaluation ──────────────────────────────────────────────────────────
+
+export type EvalStatus = 'pass' | 'fail' | 'pending';
+
+export interface EvalResult {
+  status: EvalStatus;
+  score: number;        // 0–100
+  critique: string;     // short failure reason
+  suggestion: string;   // improvement direction for retry
+  timestamp: number;
+}
+
+// ─── Document Node ────────────────────────────────────────────────────────────
+
+export interface DocumentNode {
+  id: string;
+  projectId: string;
+  title: string;
+  content: string;      // raw text content (brief, guidelines, etc.)
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isMinimized: boolean;
+  createdAt: number;
+  sourceType: 'paste' | 'upload';
+}
+
+// ─── Preference Profile ───────────────────────────────────────────────────────
+
+export interface PreferenceProfile {
+  id: string;               // equals projectId (1-to-1)
+  projectId: string;
+  approvedStyles: string[];
+  rejectedStyles: string[];
+  userCorrections: string[];
+  updatedAt: number;
+}
 
 // ─── God Mode Node ─────────────────────────────────────────────────────────────
 

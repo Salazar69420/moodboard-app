@@ -7,6 +7,9 @@ export function SettingsModal() {
     const {
         apiKey, openAiApiKey, model, customModels, showSettings,
         setApiKey, setOpenAiApiKey, setModel, addCustomModel, removeCustomModel, closeSettings,
+        enableSelfEval, setEnableSelfEval,
+        enableBoardContext, setEnableBoardContext,
+        enablePreferences, setEnablePreferences,
     } = useSettingsStore();
 
     const [localKey, setLocalKey] = useState(apiKey);
@@ -432,6 +435,54 @@ export function SettingsModal() {
                                 color: '#888', background: '#1a1a1a',
                                 padding: '1px 4px', borderRadius: 3,
                             }}>openai/gpt-5.4-pro</code>)
+                        </div>
+                    </div>
+
+                    {/* ── AI Behavior ── */}
+                    <div style={{ paddingBottom: 8 }}>
+                        <label style={{
+                            display: 'block', fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
+                            color: '#888', marginBottom: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
+                        }}>
+                            AI Behavior
+                        </label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {([
+                                { key: 'enableSelfEval', label: 'Self-Evaluate Outputs', desc: 'AI scores each generated prompt automatically', value: enableSelfEval, setter: setEnableSelfEval },
+                                { key: 'enableBoardContext', label: 'Full Board Context', desc: 'Sends all canvas image metadata to AI as context', value: enableBoardContext, setter: setEnableBoardContext },
+                                { key: 'enablePreferences', label: 'Preference Learning', desc: 'Injects learned style preferences into every AI call', value: enablePreferences, setter: setEnablePreferences },
+                            ] as const).map(({ key, label, desc, value, setter }) => (
+                                <div key={key} style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    padding: '9px 12px', borderRadius: 9,
+                                    background: 'rgba(255,255,255,0.025)',
+                                    border: '1px solid rgba(255,255,255,0.06)',
+                                }}>
+                                    <div>
+                                        <div style={{ fontSize: 12, color: '#d0d0d0', fontFamily: "'Inter', system-ui, sans-serif", fontWeight: 500, marginBottom: 2 }}>
+                                            {label}
+                                        </div>
+                                        <div style={{ fontSize: 10, color: '#555', fontFamily: "'Inter', system-ui, sans-serif" }}>
+                                            {desc}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setter(!value)}
+                                        style={{
+                                            width: 36, height: 20, borderRadius: 10, border: 'none',
+                                            background: value ? '#f97316' : 'rgba(255,255,255,0.1)',
+                                            cursor: 'pointer', position: 'relative', flexShrink: 0,
+                                            transition: 'background 0.2s ease', marginLeft: 16,
+                                        }}
+                                    >
+                                        <span style={{
+                                            position: 'absolute', top: 2, left: value ? 18 : 2,
+                                            width: 16, height: 16, borderRadius: '50%',
+                                            background: '#fff', transition: 'left 0.2s ease',
+                                        }} />
+                                    </button>
+                                </div>
+                            ))}
                         </div>
                     </div>
 

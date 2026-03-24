@@ -1,5 +1,5 @@
 import { getDB } from './db';
-import type { Project, BoardImage, ProjectType } from '../types';
+import type { Project, BoardImage, ProjectType, DocumentNode, PreferenceProfile } from '../types';
 import { nanoid } from 'nanoid';
 
 // ---- Projects ----
@@ -91,3 +91,35 @@ export async function getBlob(blobId: string): Promise<Blob | null> {
   const record = await db.get('blobs', blobId);
   return record?.blob ?? null;
 }
+
+// ---- Document Nodes ----
+
+export async function getDocumentNodesByProject(projectId: string): Promise<DocumentNode[]> {
+  const db = await getDB();
+  return db.getAllFromIndex('documentNodes', 'by-project', projectId);
+}
+
+export async function storeDocumentNode(node: DocumentNode): Promise<void> {
+  const db = await getDB();
+  await db.put('documentNodes', node);
+}
+
+export async function deleteDocumentNode(id: string): Promise<void> {
+  const db = await getDB();
+  await db.delete('documentNodes', id);
+}
+
+// ---- Preferences ----
+
+export async function getPreference(projectId: string): Promise<PreferenceProfile | null> {
+  const db = await getDB();
+  const results = await db.getAllFromIndex('preferences', 'by-project', projectId);
+  return results[0] ?? null;
+}
+
+export async function storePreference(profile: PreferenceProfile): Promise<void> {
+  const db = await getDB();
+  await db.put('preferences', profile);
+}
+
+export { nanoid };

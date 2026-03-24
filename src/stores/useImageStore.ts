@@ -17,6 +17,7 @@ interface ImageStore {
   updateLabel: (imageId: string, label: string) => Promise<void>;
   updateAccentColor: (imageId: string, color: string) => Promise<void>;
   updateShotOrder: (imageId: string, order: number) => Promise<void>;
+  updateImageFields: (imageId: string, updates: Partial<BoardImage>) => Promise<void>;
   reorderImages: (orderedIds: string[]) => Promise<void>;
   duplicateImage: (imageId: string) => Promise<string | null>;
   moveImageToProject: (imageId: string, targetProjectId: string) => Promise<void>;
@@ -104,6 +105,18 @@ export const useImageStore = create<ImageStore>((set, get) => ({
         images: state.images.map((i) =>
           i.id === imageId ? { ...i, shotOrder: order } : i
         ),
+      }));
+    }
+  },
+
+  updateImageFields: async (imageId, updates) => {
+    const db = await getDB();
+    const img = await db.get('images', imageId);
+    if (img) {
+      const updated = { ...img, ...updates };
+      await db.put('images', updated);
+      set((state) => ({
+        images: state.images.map((i) => i.id === imageId ? updated : i),
       }));
     }
   },
