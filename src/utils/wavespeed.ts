@@ -34,7 +34,7 @@ export async function generateImageWithNanoBanana2(
             images: imageUrls,
             output_format: 'png',
             prompt,
-            resolution: '1k',
+            resolution: '0.5k',
         }),
     });
 
