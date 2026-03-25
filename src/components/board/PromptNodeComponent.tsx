@@ -11,6 +11,7 @@ import { generateEditPrompt } from '../../utils/edit-prompt-generator';
 import { buildRetryContext } from '../../utils/eval-engine';
 import { generateImageWithNanoBanana2 } from '../../utils/wavespeed';
 import { storeImage, storeBlob } from '../../utils/db-operations';
+import { imageToBase64 } from '../../utils/ai-features';
 import { EvalBadge } from './EvalBadge';
 import type { GodModeNode } from '../../types';
 
@@ -212,7 +213,17 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
 
         setIsGeneratingImage(true);
         try {
-            const { imageUrl } = await generateImageWithNanoBanana2(wavespeedApiKey, node.text);
+            // Build reference images array from the parent image connected to this node
+            const referenceImages: string[] = [];
+            const parentImage = images.find(img => img.id === node.imageId);
+            if (parentImage) {
+                const imgData = await imageToBase64(parentImage.blobId);
+                if (imgData) {
+                    referenceImages.push(`data:${imgData.mimeType};base64,${imgData.base64}`);
+                }
+            }
+
+            const { imageUrl } = await generateImageWithNanoBanana2(wavespeedApiKey, node.text, referenceImages);
 
             // Download the generated image
             const imgRes = await fetch(imageUrl);
