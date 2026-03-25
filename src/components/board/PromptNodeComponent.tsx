@@ -1,11 +1,16 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import type { PromptNode } from '../../types';
+import type { BoardImage } from '../../types';
 import { useBoardStore } from '../../stores/useBoardStore';
 import { useImageStore } from '../../stores/useImageStore';
 import { useSettingsStore } from '../../stores/useSettingsStore';
+import { useUIStore } from '../../stores/useUIStore';
+import { useProjectStore } from '../../stores/useProjectStore';
 import { generatePrompt } from '../../utils/prompt-generator';
 import { generateEditPrompt } from '../../utils/edit-prompt-generator';
 import { buildRetryContext } from '../../utils/eval-engine';
+import { generateImageWithNanoBanana2 } from '../../utils/wavespeed';
+import { storeImage, storeBlob } from '../../utils/db-operations';
 import { EvalBadge } from './EvalBadge';
 import type { GodModeNode } from '../../types';
 
@@ -38,6 +43,11 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
 
     const apiKey = useSettingsStore((s) => s.apiKey);
     const model = useSettingsStore((s) => s.model);
+    const wavespeedApiKey = useSettingsStore((s) => s.wavespeedApiKey);
+    const toggleSettings = useSettingsStore((s) => s.toggleSettings);
+    const showToast = useUIStore((s) => s.showToast);
+    const currentProjectId = useProjectStore((s) => s.currentProjectId);
+    const addImage = useImageStore((s) => s.addImage);
 
     const cfg = TYPE_CONFIG[node.promptType];
 
@@ -48,6 +58,7 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
     const [copied, setCopied] = useState(false);
     const [isRegenerating, setIsRegenerating] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
+    const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
     useEffect(() => {
         const id = requestAnimationFrame(() => setMounted(true));
@@ -190,6 +201,75 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
         e.stopPropagation();
         await restorePromptVersion(node.id, index);
     }, [node.id, restorePromptVersion]);
+
+    const handleGenerateImage = useCallback(async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!wavespeedApiKey) {
+            toggleSettings();
+            return;
+        }
+        if (isGeneratingImage || !currentProjectId) return;
+
+        setIsGeneratingImage(true);
+        try {
+            // Detect aspect ratio from parent image if available
+            const parentImage = images.find(img => img.id === node.imageId);
+            let aspectRatio = '1:1';
+            if (parentImage) {
+                const ratio = parentImage.width / parentImage.height;
+                if (ratio > 1.6) aspectRatio = '16:9';
+                else if (ratio < 0.65) aspectRatio = '9:16';
+                else if (ratio > 1.2) aspectRatio = '4:3';
+                else if (ratio < 0.85) aspectRatio = '3:4';
+            }
+
+            const { imageUrl } = await generateImageWithNanoBanana2(wavespeedApiKey, node.text, aspectRatio);
+
+            // Download the generated image
+            const imgRes = await fetch(imageUrl);
+            if (!imgRes.ok) throw new Error('Failed to download generated image');
+            const blob = await imgRes.blob();
+
+            // Detect dimensions
+            let width = 1024;
+            let height = 1024;
+            try {
+                const bmp = await createImageBitmap(blob);
+                width = bmp.width;
+                height = bmp.height;
+                bmp.close();
+            } catch { /* use defaults */ }
+
+            // Store blob + image record
+            const { nanoid } = await import('nanoid');
+            const blobId = nanoid();
+            const imageId = nanoid();
+            await storeBlob(blobId, blob);
+
+            const newImage: BoardImage = {
+                id: imageId,
+                projectId: currentProjectId,
+                blobId,
+                filename: `nano-banana-2-${Date.now()}.png`,
+                mimeType: blob.type || 'image/png',
+                width,
+                height,
+                x: node.x + (node.width ?? 280) + 48,
+                y: node.y,
+                label: '',
+                createdAt: Date.now(),
+                shotOrder: Date.now(),
+            };
+            await storeImage(newImage);
+            addImage(newImage);
+            showToast('Image generated with Nano Banana 2');
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Generation failed';
+            showToast(`Image generation failed: ${msg}`);
+        } finally {
+            setIsGeneratingImage(false);
+        }
+    }, [wavespeedApiKey, isGeneratingImage, currentProjectId, node, images, addImage, showToast, toggleSettings]);
 
     const createdTime = new Date(node.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -527,6 +607,80 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
 
                         {/* Eval badge */}
                         <EvalBadge evalResult={node.evalResult} />
+
+                        {/* Generate Image — Nano Banana 2 */}
+                        <button
+                            onClick={handleGenerateImage}
+                            disabled={isGeneratingImage}
+                            title={wavespeedApiKey ? 'Generate image with Nano Banana 2 (WaveSpeed AI)' : 'Add Pi Key in Settings to generate images'}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                padding: '4px 9px',
+                                borderRadius: 6,
+                                border: isGeneratingImage
+                                    ? '1px solid rgba(168,85,247,0.35)'
+                                    : wavespeedApiKey
+                                        ? '1px solid rgba(168,85,247,0.25)'
+                                        : '1px solid rgba(255,255,255,0.07)',
+                                background: isGeneratingImage
+                                    ? 'rgba(168,85,247,0.10)'
+                                    : wavespeedApiKey
+                                        ? 'rgba(168,85,247,0.07)'
+                                        : 'rgba(255,255,255,0.02)',
+                                color: isGeneratingImage
+                                    ? '#c084fc'
+                                    : wavespeedApiKey
+                                        ? '#a855f7'
+                                        : 'rgba(255,255,255,0.25)',
+                                fontSize: 10,
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontWeight: 500,
+                                cursor: isGeneratingImage ? 'wait' : 'pointer',
+                                transition: 'all 0.15s ease',
+                                touchAction: 'manipulation',
+                                opacity: !wavespeedApiKey ? 0.5 : 1,
+                            }}
+                            onMouseEnter={(e) => {
+                                if (!isGeneratingImage && wavespeedApiKey) {
+                                    (e.currentTarget as HTMLElement).style.background = 'rgba(168,85,247,0.15)';
+                                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(168,85,247,0.4)';
+                                    (e.currentTarget as HTMLElement).style.color = '#c084fc';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (!isGeneratingImage && wavespeedApiKey) {
+                                    (e.currentTarget as HTMLElement).style.background = 'rgba(168,85,247,0.07)';
+                                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(168,85,247,0.25)';
+                                    (e.currentTarget as HTMLElement).style.color = '#a855f7';
+                                }
+                            }}
+                        >
+                            {isGeneratingImage ? (
+                                <>
+                                    <div style={{
+                                        width: 9,
+                                        height: 9,
+                                        border: '1.5px solid rgba(168,85,247,0.25)',
+                                        borderTopColor: '#a855f7',
+                                        borderRadius: '50%',
+                                        animation: 'spin 0.7s linear infinite',
+                                        flexShrink: 0,
+                                    }} />
+                                    <span>Generating…</span>
+                                </>
+                            ) : (
+                                <>
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                        <circle cx="8.5" cy="8.5" r="1.5" />
+                                        <polyline points="21 15 16 10 5 21" />
+                                    </svg>
+                                    <span>Generate Image</span>
+                                </>
+                            )}
+                        </button>
 
                         <span style={{ flex: 1 }} />
 
