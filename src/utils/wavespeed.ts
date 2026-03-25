@@ -1,4 +1,4 @@
-const GENERATE_URL = 'https://api.wavespeed.ai/api/v3/wavespeed-ai/nano-banana-2/text-to-image';
+const GENERATE_URL = 'https://api.wavespeed.ai/api/v3/google/nano-banana-2/edit';
 const POLL_URL = 'https://api.wavespeed.ai/api/v3/predictions';
 const POLL_INTERVAL_MS = 1500;
 const TIMEOUT_MS = 90_000;
@@ -9,13 +9,13 @@ export interface WavespeedResult {
 }
 
 /**
- * Generate an image with WaveSpeed Nano Banana 2.
+ * Generate an image with WaveSpeed Nano Banana 2 (google/nano-banana-2/edit).
  * Submits the job, then polls until complete.
  */
 export async function generateImageWithNanoBanana2(
     piKey: string,
     prompt: string,
-    aspectRatio: string = '1:1',
+    imageUrls: string[] = [],
 ): Promise<WavespeedResult> {
     if (!piKey) throw new Error('Pi Key not set — add it in Settings');
 
@@ -27,10 +27,14 @@ export async function generateImageWithNanoBanana2(
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            prompt,
-            resolution: '1k',
-            aspect_ratio: aspectRatio,
+            enable_base64_output: false,
+            enable_image_search: false,
+            enable_sync_mode: false,
+            enable_web_search: false,
+            images: imageUrls,
             output_format: 'png',
+            prompt,
+            resolution: '0.5k',
         }),
     });
 
