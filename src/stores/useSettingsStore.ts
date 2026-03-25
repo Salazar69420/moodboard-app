@@ -10,6 +10,7 @@ export interface ModelEntry {
 interface SettingsStore {
     apiKey: string;
     openAiApiKey: string;
+    wavespeedApiKey: string;
     model: string;
     customModels: ModelEntry[];
     showSettings: boolean;
@@ -21,6 +22,7 @@ interface SettingsStore {
 
     setApiKey: (key: string) => void;
     setOpenAiApiKey: (key: string) => void;
+    setWavespeedApiKey: (key: string) => void;
     setModel: (model: string) => void;
     addCustomModel: (id: string) => void;
     removeCustomModel: (id: string) => void;
@@ -33,7 +35,7 @@ interface SettingsStore {
 
 const STORAGE_KEY = 'moodboard-settings';
 
-function loadFromStorage(): { apiKey?: string; openAiApiKey?: string; model?: string; customModels?: ModelEntry[]; enableSelfEval?: boolean; enableBoardContext?: boolean; enablePreferences?: boolean } {
+function loadFromStorage(): { apiKey?: string; openAiApiKey?: string; wavespeedApiKey?: string; model?: string; customModels?: ModelEntry[]; enableSelfEval?: boolean; enableBoardContext?: boolean; enablePreferences?: boolean } {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) return JSON.parse(raw);
@@ -41,7 +43,7 @@ function loadFromStorage(): { apiKey?: string; openAiApiKey?: string; model?: st
     return {};
 }
 
-function saveToStorage(data: { apiKey: string; openAiApiKey: string; model: string; customModels: ModelEntry[]; enableSelfEval: boolean; enableBoardContext: boolean; enablePreferences: boolean }) {
+function saveToStorage(data: { apiKey: string; openAiApiKey: string; wavespeedApiKey: string; model: string; customModels: ModelEntry[]; enableSelfEval: boolean; enableBoardContext: boolean; enablePreferences: boolean }) {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch { /* ignore */ }
@@ -87,6 +89,7 @@ const stored = loadFromStorage();
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
     apiKey: stored.apiKey || '',
     openAiApiKey: stored.openAiApiKey || '',
+    wavespeedApiKey: stored.wavespeedApiKey || '',
     model: stored.model || 'google/gemini-2.0-flash-001',
     customModels: stored.customModels || [],
     showSettings: false,
@@ -97,19 +100,25 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     setApiKey: (apiKey) => {
         set({ apiKey });
         const s = get();
-        saveToStorage({ apiKey, openAiApiKey: s.openAiApiKey, model: s.model, customModels: s.customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
+        saveToStorage({ apiKey, openAiApiKey: s.openAiApiKey, wavespeedApiKey: s.wavespeedApiKey, model: s.model, customModels: s.customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
     },
 
     setOpenAiApiKey: (openAiApiKey) => {
         set({ openAiApiKey });
         const s = get();
-        saveToStorage({ apiKey: s.apiKey, openAiApiKey, model: s.model, customModels: s.customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
+        saveToStorage({ apiKey: s.apiKey, openAiApiKey, wavespeedApiKey: s.wavespeedApiKey, model: s.model, customModels: s.customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
+    },
+
+    setWavespeedApiKey: (wavespeedApiKey) => {
+        set({ wavespeedApiKey });
+        const s = get();
+        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, wavespeedApiKey, model: s.model, customModels: s.customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
     },
 
     setModel: (model) => {
         set({ model });
         const s = get();
-        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, model, customModels: s.customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
+        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, wavespeedApiKey: s.wavespeedApiKey, model, customModels: s.customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
     },
 
     addCustomModel: (id) => {
@@ -125,7 +134,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         const customModels = [...get().customModels, newModel];
         set({ customModels, model: trimmed });
         const s = get();
-        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, model: trimmed, customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
+        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, wavespeedApiKey: s.wavespeedApiKey, model: trimmed, customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
     },
 
     removeCustomModel: (id) => {
@@ -133,7 +142,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         const newModel = get().model === id ? DEFAULT_MODELS[0].id : get().model;
         set({ customModels, model: newModel });
         const s = get();
-        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, model: newModel, customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
+        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, wavespeedApiKey: s.wavespeedApiKey, model: newModel, customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
     },
 
     toggleSettings: () => set(s => ({ showSettings: !s.showSettings })),
@@ -142,18 +151,18 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     setEnableSelfEval: (enableSelfEval) => {
         set({ enableSelfEval });
         const s = get();
-        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, model: s.model, customModels: s.customModels, enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
+        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, wavespeedApiKey: s.wavespeedApiKey, model: s.model, customModels: s.customModels, enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences: s.enablePreferences });
     },
 
     setEnableBoardContext: (enableBoardContext) => {
         set({ enableBoardContext });
         const s = get();
-        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, model: s.model, customModels: s.customModels, enableSelfEval: s.enableSelfEval, enableBoardContext, enablePreferences: s.enablePreferences });
+        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, wavespeedApiKey: s.wavespeedApiKey, model: s.model, customModels: s.customModels, enableSelfEval: s.enableSelfEval, enableBoardContext, enablePreferences: s.enablePreferences });
     },
 
     setEnablePreferences: (enablePreferences) => {
         set({ enablePreferences });
         const s = get();
-        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, model: s.model, customModels: s.customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences });
+        saveToStorage({ apiKey: s.apiKey, openAiApiKey: s.openAiApiKey, wavespeedApiKey: s.wavespeedApiKey, model: s.model, customModels: s.customModels, enableSelfEval: s.enableSelfEval, enableBoardContext: s.enableBoardContext, enablePreferences });
     },
 }));

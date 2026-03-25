@@ -5,8 +5,8 @@ import { getLogs } from '../../utils/logger';
 
 export function SettingsModal() {
     const {
-        apiKey, openAiApiKey, model, customModels, showSettings,
-        setApiKey, setOpenAiApiKey, setModel, addCustomModel, removeCustomModel, closeSettings,
+        apiKey, openAiApiKey, wavespeedApiKey, model, customModels, showSettings,
+        setApiKey, setOpenAiApiKey, setWavespeedApiKey, setModel, addCustomModel, removeCustomModel, closeSettings,
         enableSelfEval, setEnableSelfEval,
         enableBoardContext, setEnableBoardContext,
         enablePreferences, setEnablePreferences,
@@ -14,10 +14,13 @@ export function SettingsModal() {
 
     const [localKey, setLocalKey] = useState(apiKey);
     const [localOpenAiKey, setLocalOpenAiKey] = useState(openAiApiKey);
+    const [localWavespeedKey, setLocalWavespeedKey] = useState(wavespeedApiKey);
     const [showKey, setShowKey] = useState(false);
     const [showOpenAiKey, setShowOpenAiKey] = useState(false);
+    const [showWavespeedKey, setShowWavespeedKey] = useState(false);
     const [saved, setSaved] = useState(false);
     const [savedOpenAi, setSavedOpenAi] = useState(false);
+    const [savedWavespeed, setSavedWavespeed] = useState(false);
     const [customInput, setCustomInput] = useState('');
     const [justAdded, setJustAdded] = useState<string | null>(null);
     const [logLines, setLogLines] = useState(100);
@@ -34,6 +37,12 @@ export function SettingsModal() {
         setOpenAiApiKey(localOpenAiKey.trim());
         setSavedOpenAi(true);
         setTimeout(() => setSavedOpenAi(false), 1500);
+    };
+
+    const handleSaveWavespeed = () => {
+        setWavespeedApiKey(localWavespeedKey.trim());
+        setSavedWavespeed(true);
+        setTimeout(() => setSavedWavespeed(false), 1500);
     };
 
     const handleAddCustom = () => {
@@ -257,6 +266,75 @@ export function SettingsModal() {
                             Used for Whisper (transcription) and TTS (voice). Get key at{' '}
                             <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer"
                                 style={{ color: '#f97316', textDecoration: 'none' }}>platform.openai.com</a>
+                        </div>
+                    </div>
+
+                    {/* ── Pi Key (WaveSpeed) ── */}
+                    <div>
+                        <label style={{
+                            display: 'block', fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
+                            color: '#888', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase',
+                        }}>
+                            <span style={{ color: '#a855f7' }}>Pi Key</span>
+                            <span style={{ color: '#555', marginLeft: 6 }}>· WaveSpeed AI · Nano Banana 2</span>
+                        </label>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                            <div style={{ flex: 1, position: 'relative' }}>
+                                <input
+                                    type={showWavespeedKey ? 'text' : 'password'}
+                                    value={localWavespeedKey}
+                                    onChange={e => setLocalWavespeedKey(e.target.value)}
+                                    placeholder="ws-..."
+                                    style={{
+                                        width: '100%', background: '#0a0a0a', border: '1px solid #2a2a2a',
+                                        borderRadius: 8, color: '#e5e5e5', fontSize: 13,
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        padding: '9px 40px 9px 12px', outline: 'none',
+                                        transition: 'border-color 0.12s ease',
+                                    }}
+                                    onFocus={e => (e.target as HTMLElement).style.borderColor = '#a855f7'}
+                                    onBlur={e => (e.target as HTMLElement).style.borderColor = '#2a2a2a'}
+                                />
+                                <button
+                                    onClick={() => setShowWavespeedKey(!showWavespeedKey)}
+                                    style={{
+                                        position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                                        background: 'none', border: 'none', color: '#555', cursor: 'pointer',
+                                        padding: 4, display: 'flex',
+                                    }}
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        {showWavespeedKey ? (
+                                            <>
+                                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                                                <line x1="1" y1="1" x2="23" y2="23" />
+                                            </>
+                                        ) : (
+                                            <>
+                                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                                <circle cx="12" cy="12" r="3" />
+                                            </>
+                                        )}
+                                    </svg>
+                                </button>
+                            </div>
+                            <button
+                                onClick={handleSaveWavespeed}
+                                style={{
+                                    background: savedWavespeed ? 'rgba(74,222,128,0.15)' : 'rgba(168,85,247,0.12)',
+                                    border: `1px solid ${savedWavespeed ? 'rgba(74,222,128,0.3)' : 'rgba(168,85,247,0.3)'}`,
+                                    color: savedWavespeed ? '#4ade80' : '#a855f7', borderRadius: 8,
+                                    padding: '0 14px', fontSize: 12, fontFamily: "'Inter', system-ui, sans-serif",
+                                    fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s ease', whiteSpace: 'nowrap',
+                                }}
+                            >
+                                {savedWavespeed ? '✓ Saved' : 'Save'}
+                            </button>
+                        </div>
+                        <div style={{ marginTop: 6, fontSize: 10, color: '#555', fontFamily: "'Inter', system-ui, sans-serif" }}>
+                            Enables image generation from prompts. Get key at{' '}
+                            <a href="https://wavespeed.ai/accesskey" target="_blank" rel="noopener noreferrer"
+                                style={{ color: '#a855f7', textDecoration: 'none' }}>wavespeed.ai/accesskey</a>
                         </div>
                     </div>
 
