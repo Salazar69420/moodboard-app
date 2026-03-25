@@ -43,6 +43,7 @@ export async function generateImageWithNanoBanana2(
         try {
             const body = await submitRes.json();
             if (body?.message) msg = body.message;
+            else if (body?.error) msg = body.error;
         } catch { /* ignore */ }
         throw new Error(msg);
     }
@@ -51,12 +52,12 @@ export async function generateImageWithNanoBanana2(
     const taskId: string = submitData?.data?.id;
     if (!taskId) throw new Error('No task ID returned from WaveSpeed');
 
-    // Poll for completion
+    // Poll for completion — WaveSpeed uses /result suffix
     const deadline = Date.now() + TIMEOUT_MS;
     while (Date.now() < deadline) {
         await sleep(POLL_INTERVAL_MS);
 
-        const pollRes = await fetch(`${POLL_URL}/${taskId}`, {
+        const pollRes = await fetch(`${POLL_URL}/${taskId}/result`, {
             headers: { 'Authorization': `Bearer ${piKey}` },
         });
 
@@ -66,7 +67,7 @@ export async function generateImageWithNanoBanana2(
         const status: string = pollData?.data?.status;
         const outputs: string[] = pollData?.data?.outputs ?? [];
 
-        if (status === 'completed') {
+        if (status === 'succeeded' || status === 'completed') {
             const imageUrl = outputs[0];
             if (!imageUrl) throw new Error('Generation completed but no output URL');
             return { imageUrl, taskId };

@@ -22,6 +22,7 @@ interface ImageStore {
   duplicateImage: (imageId: string) => Promise<string | null>;
   moveImageToProject: (imageId: string, targetProjectId: string) => Promise<void>;
   updateImageBlob: (imageId: string, newBlob: Blob, newW: number, newH: number) => Promise<void>;
+  removeImageLocal: (imageId: string) => void;
   // Remote-safe mutations (no Yjs write-back)
   upsertImageFromRemote: (image: BoardImage) => void;
   removeImageFromRemote: (imageId: string) => void;
@@ -188,6 +189,10 @@ export const useImageStore = create<ImageStore>((set, get) => ({
   },
 
   clear: () => set({ images: [], isLoaded: false }),
+
+  removeImageLocal: (imageId) => {
+    set((state) => ({ images: state.images.filter((i) => i.id !== imageId) }));
+  },
 
   upsertImageFromRemote: (image) => {
     set((state) => {

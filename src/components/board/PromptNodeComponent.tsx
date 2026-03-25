@@ -49,6 +49,7 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
     const showToast = useUIStore((s) => s.showToast);
     const currentProjectId = useProjectStore((s) => s.currentProjectId);
     const addImage = useImageStore((s) => s.addImage);
+    const removeImageLocal = useImageStore((s) => s.removeImageLocal);
 
     const cfg = TYPE_CONFIG[node.promptType];
 
@@ -212,6 +213,27 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
         if (isGeneratingImage || !currentProjectId) return;
 
         setIsGeneratingImage(true);
+
+        // Place a shimmer placeholder on the canvas immediately
+        const { nanoid } = await import('nanoid');
+        const placeholderId = nanoid();
+        const placeholderImage: BoardImage = {
+            id: placeholderId,
+            projectId: currentProjectId,
+            blobId: '',
+            filename: '',
+            mimeType: 'image/png',
+            width: 512,
+            height: 512,
+            x: node.x + (node.width ?? 280) + 48,
+            y: node.y,
+            label: '',
+            createdAt: Date.now(),
+            shotOrder: Date.now(),
+            isGenerating: true,
+        };
+        addImage(placeholderImage);
+
         try {
             // Build reference images array from the parent image connected to this node
             const referenceImages: string[] = [];
@@ -231,8 +253,8 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
             const blob = await imgRes.blob();
 
             // Detect dimensions
-            let width = 1024;
-            let height = 1024;
+            let width = 512;
+            let height = 512;
             try {
                 const bmp = await createImageBitmap(blob);
                 width = bmp.width;
@@ -240,8 +262,9 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
                 bmp.close();
             } catch { /* use defaults */ }
 
-            // Store blob + image record
-            const { nanoid } = await import('nanoid');
+            // Remove placeholder and store real image
+            removeImageLocal(placeholderId);
+
             const blobId = nanoid();
             const imageId = nanoid();
             await storeBlob(blobId, blob);
@@ -264,12 +287,13 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
             addImage(newImage);
             showToast('Image generated with Nano Banana 2');
         } catch (err: unknown) {
+            removeImageLocal(placeholderId);
             const msg = err instanceof Error ? err.message : 'Generation failed';
             showToast(`Image generation failed: ${msg}`);
         } finally {
             setIsGeneratingImage(false);
         }
-    }, [wavespeedApiKey, isGeneratingImage, currentProjectId, node, images, addImage, showToast, toggleSettings]);
+    }, [wavespeedApiKey, isGeneratingImage, currentProjectId, node, images, addImage, removeImageLocal, showToast, toggleSettings]);
 
     const createdTime = new Date(node.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 

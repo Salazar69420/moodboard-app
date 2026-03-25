@@ -34,6 +34,7 @@ export interface BoardImage {
   shotOrder?: number;   // ordering in shot sequence panel
   evaluation?: 'accepted' | 'rejected' | null; // user rating
   evalCritique?: string; // user-written rejection note
+  isGenerating?: boolean; // true while WaveSpeed generation is in progress
 }
 
 export interface ImageBlob {

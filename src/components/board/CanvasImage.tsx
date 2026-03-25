@@ -348,6 +348,71 @@ export const CanvasImage = memo(function CanvasImage({ image, zoomScale }: Canva
   const accentColor = image.accentColor || '#f97316';
 
   if (!blobUrl) {
+    if (image.isGenerating) {
+      return (
+        <div
+          className="absolute rounded-lg overflow-hidden"
+          style={{
+            left: image.x,
+            top: image.y,
+            width: displayW,
+            height: displayH,
+            background: 'rgba(10,8,18,0.95)',
+            border: '1px solid rgba(168,85,247,0.3)',
+            boxShadow: '0 0 24px rgba(168,85,247,0.12), inset 0 0 40px rgba(168,85,247,0.04)',
+          }}
+        >
+          {/* Animated shimmer sweep */}
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(105deg, transparent 35%, rgba(168,85,247,0.08) 50%, rgba(192,132,252,0.06) 55%, transparent 65%)',
+            backgroundSize: '200% 100%',
+            animation: 'wavespeedShimmer 1.6s ease-in-out infinite',
+          }} />
+          {/* Soft grid lines */}
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundImage: 'linear-gradient(rgba(168,85,247,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(168,85,247,0.04) 1px, transparent 1px)',
+            backgroundSize: '32px 32px',
+          }} />
+          {/* Corner accents */}
+          <div style={{ position: 'absolute', top: 8, left: 8, width: 16, height: 16, borderTop: '1.5px solid rgba(168,85,247,0.5)', borderLeft: '1.5px solid rgba(168,85,247,0.5)', borderRadius: '2px 0 0 0' }} />
+          <div style={{ position: 'absolute', top: 8, right: 8, width: 16, height: 16, borderTop: '1.5px solid rgba(168,85,247,0.5)', borderRight: '1.5px solid rgba(168,85,247,0.5)', borderRadius: '0 2px 0 0' }} />
+          <div style={{ position: 'absolute', bottom: 8, left: 8, width: 16, height: 16, borderBottom: '1.5px solid rgba(168,85,247,0.5)', borderLeft: '1.5px solid rgba(168,85,247,0.5)', borderRadius: '0 0 0 2px' }} />
+          <div style={{ position: 'absolute', bottom: 8, right: 8, width: 16, height: 16, borderBottom: '1.5px solid rgba(168,85,247,0.5)', borderRight: '1.5px solid rgba(168,85,247,0.5)', borderRadius: '0 0 2px 0' }} />
+          {/* Center label */}
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+          }}>
+            <div style={{
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              border: '2px solid rgba(168,85,247,0.2)',
+              borderTopColor: '#a855f7',
+              borderRightColor: 'rgba(168,85,247,0.5)',
+              animation: 'spin 1s linear infinite',
+            }} />
+            <span style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10,
+              fontWeight: 500,
+              letterSpacing: '0.12em',
+              color: 'rgba(168,85,247,0.7)',
+              textTransform: 'uppercase',
+            }}>Generating…</span>
+          </div>
+        </div>
+      );
+    }
     return (
       <div
         className="absolute rounded-lg overflow-hidden border border-[#2a2a2a]"
