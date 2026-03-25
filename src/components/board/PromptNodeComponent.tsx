@@ -223,7 +223,7 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
                 else if (ratio < 0.85) aspectRatio = '3:4';
             }
 
-            const { imageUrl } = await generateImageWithNanoBanana2(wavespeedApiKey, node.text, aspectRatio);
+            const { imageUrl } = await generateImageWithNanoBanana2(wavespeedApiKey, node.text);
 
             // Download the generated image
             const imgRes = await fetch(imageUrl);
