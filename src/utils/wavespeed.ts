@@ -1,4 +1,4 @@
-const GENERATE_URL = 'https://api.wavespeed.ai/api/v3/wavespeed-ai/nano-banana-2/text-to-image';
+const GENERATE_URL = 'https://api.wavespeed.ai/api/v3/google/nano-banana-2/edit';
 const POLL_URL = 'https://api.wavespeed.ai/api/v3/predictions';
 const POLL_INTERVAL_MS = 1500;
 const TIMEOUT_MS = 90_000;
