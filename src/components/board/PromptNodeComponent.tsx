@@ -61,6 +61,7 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
     const [isRegenerating, setIsRegenerating] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
     const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+    const [genAspectRatio, setGenAspectRatio] = useState<'1:1' | '16:9' | '9:16' | '4:3' | '3:4'>('1:1');
 
     useEffect(() => {
         const id = requestAnimationFrame(() => setMounted(true));
@@ -217,14 +218,19 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
         // Place a shimmer placeholder on the canvas immediately
         const { nanoid } = await import('nanoid');
         const placeholderId = nanoid();
+        const arMap: Record<string, [number, number]> = {
+            '1:1': [512, 512], '16:9': [910, 512], '9:16': [512, 910],
+            '4:3': [683, 512], '3:4': [512, 683],
+        };
+        const [phW, phH] = arMap[genAspectRatio] ?? [512, 512];
         const placeholderImage: BoardImage = {
             id: placeholderId,
             projectId: currentProjectId,
             blobId: '',
             filename: '',
             mimeType: 'image/png',
-            width: 512,
-            height: 512,
+            width: phW,
+            height: phH,
             x: node.x + (node.width ?? 280) + 48,
             y: node.y,
             label: '',
@@ -245,7 +251,7 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
                 }
             }
 
-            const { imageUrl } = await generateImageWithNanoBanana2(wavespeedApiKey, node.text, referenceImages);
+            const { imageUrl } = await generateImageWithNanoBanana2(wavespeedApiKey, node.text, referenceImages, genAspectRatio);
 
             // Download the generated image
             const imgRes = await fetch(imageUrl);
@@ -293,7 +299,7 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
         } finally {
             setIsGeneratingImage(false);
         }
-    }, [wavespeedApiKey, isGeneratingImage, currentProjectId, node, images, addImage, removeImageLocal, showToast, toggleSettings]);
+    }, [wavespeedApiKey, isGeneratingImage, currentProjectId, node, images, addImage, removeImageLocal, showToast, toggleSettings, genAspectRatio]);
 
     const createdTime = new Date(node.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -631,6 +637,41 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
 
                         {/* Eval badge */}
                         <EvalBadge evalResult={node.evalResult} />
+
+                        {/* Aspect ratio selector for image generation */}
+                        {wavespeedApiKey && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}
+                                onClick={e => e.stopPropagation()}
+                            >
+                                {(['1:1', '16:9', '9:16', '4:3', '3:4'] as const).map(ratio => (
+                                    <button
+                                        key={ratio}
+                                        onClick={(e) => { e.stopPropagation(); setGenAspectRatio(ratio); }}
+                                        disabled={isGeneratingImage}
+                                        style={{
+                                            padding: '3px 5px',
+                                            borderRadius: 4,
+                                            border: genAspectRatio === ratio
+                                                ? '1px solid rgba(168,85,247,0.5)'
+                                                : '1px solid rgba(255,255,255,0.06)',
+                                            background: genAspectRatio === ratio
+                                                ? 'rgba(168,85,247,0.15)'
+                                                : 'transparent',
+                                            color: genAspectRatio === ratio
+                                                ? '#c084fc'
+                                                : 'rgba(255,255,255,0.3)',
+                                            fontSize: 9,
+                                            fontFamily: "'JetBrains Mono', monospace",
+                                            cursor: isGeneratingImage ? 'wait' : 'pointer',
+                                            transition: 'all 0.12s ease',
+                                            lineHeight: 1,
+                                        }}
+                                    >
+                                        {ratio}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
 
                         {/* Generate Image — Nano Banana 2 */}
                         <button

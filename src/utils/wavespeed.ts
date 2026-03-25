@@ -16,6 +16,7 @@ export async function generateImageWithNanoBanana2(
     piKey: string,
     prompt: string,
     imageUrls: string[] = [],
+    aspectRatio: string = '1:1',
 ): Promise<WavespeedResult> {
     if (!piKey) throw new Error('Pi Key not set — add it in Settings');
 
@@ -31,6 +32,7 @@ export async function generateImageWithNanoBanana2(
             enable_image_search: false,
             enable_sync_mode: false,
             enable_web_search: false,
+            aspect_ratio: aspectRatio,
             images: imageUrls,
             output_format: 'png',
             prompt,
