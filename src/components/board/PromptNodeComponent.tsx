@@ -212,17 +212,6 @@ export function PromptNodeComponent({ node, zoomScale = 1 }: Props) {
 
         setIsGeneratingImage(true);
         try {
-            // Detect aspect ratio from parent image if available
-            const parentImage = images.find(img => img.id === node.imageId);
-            let aspectRatio = '1:1';
-            if (parentImage) {
-                const ratio = parentImage.width / parentImage.height;
-                if (ratio > 1.6) aspectRatio = '16:9';
-                else if (ratio < 0.65) aspectRatio = '9:16';
-                else if (ratio > 1.2) aspectRatio = '4:3';
-                else if (ratio < 0.85) aspectRatio = '3:4';
-            }
-
             const { imageUrl } = await generateImageWithNanoBanana2(wavespeedApiKey, node.text);
 
             // Download the generated image
