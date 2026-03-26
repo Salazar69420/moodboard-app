@@ -3,10 +3,20 @@ import { createPortal } from 'react-dom';
 import type { BoardImage, CategoryNote } from '../../types';
 import { SHOT_CATEGORIES } from '../../types';
 import { useSettingsStore } from '../../stores/useSettingsStore';
-import { generatePrompt, generateThinkingTrace, type PromptResult } from '../../utils/prompt-generator';
+import { generatePrompt, generateThinkingTrace, type PromptResult, type MultishotShot } from '../../utils/prompt-generator';
 import { useBoardStore } from '../../stores/useBoardStore';
 import { useProjectStore } from '../../stores/useProjectStore';
 import { useUIStore } from '../../stores/useUIStore';
+
+// Decorative waveform SVG path for shot cards (purely visual, like Higgsfield)
+const WAVEFORM_PATH = "M0,12 C8,6 16,18 24,12 C32,6 40,18 48,12 C56,6 64,18 72,12 C80,6 88,18 96,12";
+function ShotCardWave({ color }: { color: string }) {
+    return (
+        <svg width="96" height="24" viewBox="0 0 96 24" fill="none" style={{ display: 'block', opacity: 0.5 }}>
+            <path d={WAVEFORM_PATH} stroke={color} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        </svg>
+    );
+}
 
 interface Props {
     image: BoardImage;
@@ -33,6 +43,16 @@ export function PromptGenerator({ image, notes, connectedImages = [] }: Props) {
     const [isHovered, setIsHovered] = useState(false);
     const [batchCount, setBatchCount] = useState<1 | 3 | 5>(1);
     const [thinkingText, setThinkingText] = useState<string | null>(null);
+
+    // Multishot state
+    const [multishotEnabled, setMultishotEnabled] = useState(false);
+    const [shotCards, setShotCards] = useState<MultishotShot[]>([
+        { id: 's1', duration: 3, description: '' },
+        { id: 's2', duration: 3, description: '' },
+        { id: 's3', duration: 3, description: '' },
+    ]);
+    const [activeShotId, setActiveShotId] = useState('s1');
+    const [editingDurationId, setEditingDurationId] = useState<string | null>(null);
 
     const filledCats = new Set(notes.map(n => n.categoryId));
     const missingCount = SHOT_CATEGORIES.length - filledCats.size;
@@ -66,8 +86,10 @@ export function PromptGenerator({ image, notes, connectedImages = [] }: Props) {
                 } catch { /* ignore trace errors */ }
             }
 
+            const msConfig = multishotEnabled ? { shots: shotCards } : undefined;
+
             if (batchCount === 1) {
-                const res = await generatePrompt(apiKey, model, image.blobId, image.mimeType, notes, connectedImages, godModeNodes);
+                const res = await generatePrompt(apiKey, model, image.blobId, image.mimeType, notes, connectedImages, godModeNodes, { multishotConfig: msConfig });
                 setResult(res);
                 if (currentProjectId) {
                     const displayW = image.displayWidth ?? Math.min(image.width, 350);
@@ -81,7 +103,7 @@ export function PromptGenerator({ image, notes, connectedImages = [] }: Props) {
                 setBatchProgress({ current: 0, total: batchCount });
                 const displayW = image.displayWidth ?? Math.min(image.width, 350);
                 const tasks = Array.from({ length: batchCount }, async (_, i) => {
-                    const res = await generatePrompt(apiKey, model, image.blobId, image.mimeType, notes, connectedImages, godModeNodes);
+                    const res = await generatePrompt(apiKey, model, image.blobId, image.mimeType, notes, connectedImages, godModeNodes, { multishotConfig: msConfig });
                     if (currentProjectId) {
                         const nodeId = await addPromptNode(
                             currentProjectId, image.id, res.prompt, res.model, 'i2v',
@@ -102,7 +124,7 @@ export function PromptGenerator({ image, notes, connectedImages = [] }: Props) {
         } finally {
             setIsGenerating(false);
         }
-    }, [apiKey, model, image, notes, connectedImages, godModeNodes, addPromptNode, updatePromptNodeEval, currentProjectId, batchCount, setBatchProgress]);
+    }, [apiKey, model, image, notes, connectedImages, godModeNodes, addPromptNode, updatePromptNodeEval, currentProjectId, batchCount, setBatchProgress, multishotEnabled, shotCards]);
 
     const handleCopy = useCallback(async () => {
         if (!result) return;
@@ -115,8 +137,385 @@ export function PromptGenerator({ image, notes, connectedImages = [] }: Props) {
 
     if (!hasAnyNotes) return null;
 
+    const activeShot = shotCards.find(s => s.id === activeShotId) ?? shotCards[0];
+    const activeShotIndex = shotCards.findIndex(s => s.id === activeShotId);
+
+    const addShot = useCallback(() => {
+        if (shotCards.length >= 6) return;
+        const newId = `s${Date.now()}`;
+        setShotCards(prev => [...prev, { id: newId, duration: 3, description: '' }]);
+        setActiveShotId(newId);
+    }, [shotCards.length]);
+
+    const removeShot = useCallback((id: string) => {
+        if (shotCards.length <= 2) return;
+        setShotCards(prev => {
+            const next = prev.filter(s => s.id !== id);
+            if (activeShotId === id) setActiveShotId(next[Math.max(0, prev.findIndex(s => s.id === id) - 1)]?.id ?? next[0].id);
+            return next;
+        });
+    }, [shotCards, activeShotId]);
+
+    const updateShotDescription = useCallback((id: string, description: string) => {
+        setShotCards(prev => prev.map(s => s.id === id ? { ...s, description } : s));
+    }, []);
+
+    const updateShotDuration = useCallback((id: string, duration: number) => {
+        const clamped = Math.max(1, Math.min(10, duration));
+        setShotCards(prev => prev.map(s => s.id === id ? { ...s, duration: clamped } : s));
+    }, []);
+
     return (
         <>
+            {/* Multishot Toggle */}
+            <div style={{ marginTop: 8 }}>
+                <button
+                    onClick={(e) => { e.stopPropagation(); setMultishotEnabled(v => !v); }}
+                    onMouseDown={e => e.stopPropagation()}
+                    style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '6px 10px',
+                        borderRadius: 8,
+                        border: multishotEnabled ? '1px solid rgba(249,115,22,0.4)' : '1px solid #1e1e1e',
+                        background: multishotEnabled ? 'rgba(249,115,22,0.06)' : '#0a0a0a',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={multishotEnabled ? '#f97316' : '#555'} strokeWidth="2" style={{ transition: 'stroke 0.15s ease' }}>
+                            <rect x="2" y="7" width="20" height="10" rx="1" />
+                            <path d="M7 7V5M12 7V5M17 7V5M7 17v2M12 17v2M17 17v2" />
+                        </svg>
+                        <span style={{
+                            fontSize: 10,
+                            fontFamily: "'JetBrains Mono', monospace",
+                            color: multishotEnabled ? '#f97316' : '#555',
+                            letterSpacing: '0.06em',
+                            textTransform: 'uppercase',
+                            fontWeight: multishotEnabled ? 600 : 400,
+                            transition: 'color 0.15s ease',
+                        }}>
+                            Multi-shot
+                        </span>
+                        {multishotEnabled && (
+                            <span style={{
+                                fontSize: 9,
+                                fontFamily: "'JetBrains Mono', monospace",
+                                color: 'rgba(249,115,22,0.6)',
+                                background: 'rgba(249,115,22,0.1)',
+                                border: '1px solid rgba(249,115,22,0.2)',
+                                borderRadius: 4,
+                                padding: '1px 5px',
+                            }}>
+                                {shotCards.length} shots · {shotCards.reduce((a, s) => a + s.duration, 0)}s total
+                            </span>
+                        )}
+                    </div>
+                    {/* Toggle pill */}
+                    <div style={{
+                        width: 28,
+                        height: 15,
+                        borderRadius: 8,
+                        background: multishotEnabled ? 'rgba(249,115,22,0.3)' : '#1e1e1e',
+                        border: multishotEnabled ? '1px solid rgba(249,115,22,0.4)' : '1px solid #2a2a2a',
+                        position: 'relative',
+                        transition: 'all 0.15s ease',
+                        flexShrink: 0,
+                    }}>
+                        <div style={{
+                            position: 'absolute',
+                            top: 2,
+                            left: multishotEnabled ? 13 : 2,
+                            width: 9,
+                            height: 9,
+                            borderRadius: '50%',
+                            background: multishotEnabled ? '#f97316' : '#444',
+                            transition: 'left 0.15s ease, background 0.15s ease',
+                        }} />
+                    </div>
+                </button>
+
+                {/* Shot Card Strip */}
+                {multishotEnabled && (
+                    <div style={{ marginTop: 8 }}>
+                        {/* Horizontal scrollable card row */}
+                        <div style={{
+                            display: 'flex',
+                            gap: 6,
+                            overflowX: 'auto',
+                            paddingBottom: 4,
+                            scrollbarWidth: 'none',
+                        }}>
+                            {shotCards.map((shot, i) => {
+                                const isActive = shot.id === activeShotId;
+                                return (
+                                    <div
+                                        key={shot.id}
+                                        onClick={(e) => { e.stopPropagation(); setActiveShotId(shot.id); }}
+                                        onMouseDown={e => e.stopPropagation()}
+                                        style={{
+                                            flexShrink: 0,
+                                            width: 90,
+                                            borderRadius: 8,
+                                            border: isActive ? '1.5px solid rgba(249,115,22,0.7)' : '1px solid #1e1e1e',
+                                            background: isActive ? '#130800' : '#0a0a0a',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease',
+                                            position: 'relative',
+                                            overflow: 'hidden',
+                                            boxShadow: isActive ? '0 0 14px rgba(249,115,22,0.12)' : 'none',
+                                        }}
+                                    >
+                                        {/* Shot number + remove button */}
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 7px 2px' }}>
+                                            <span style={{
+                                                fontSize: 9,
+                                                fontFamily: "'JetBrains Mono', monospace",
+                                                color: isActive ? '#f97316' : '#444',
+                                                letterSpacing: '0.05em',
+                                                textTransform: 'uppercase',
+                                                fontWeight: 600,
+                                                transition: 'color 0.15s ease',
+                                            }}>
+                                                SHOT {i + 1}
+                                            </span>
+                                            {shotCards.length > 2 && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); removeShot(shot.id); }}
+                                                    onMouseDown={e => e.stopPropagation()}
+                                                    style={{
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        cursor: 'pointer',
+                                                        padding: 0,
+                                                        color: '#333',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        fontSize: 10,
+                                                        lineHeight: 1,
+                                                        transition: 'color 0.12s ease',
+                                                    }}
+                                                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#ef4444'}
+                                                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#333'}
+                                                >
+                                                    ×
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Description preview */}
+                                        <div style={{
+                                            padding: '0 7px',
+                                            fontSize: 8,
+                                            fontFamily: "'Inter', system-ui, sans-serif",
+                                            color: shot.description ? (isActive ? 'rgba(249,115,22,0.6)' : '#333') : '#252525',
+                                            height: 22,
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                            lineHeight: '22px',
+                                        }}>
+                                            {shot.description || 'No description'}
+                                        </div>
+
+                                        {/* Waveform decoration */}
+                                        <div style={{ padding: '2px 7px 2px', display: 'flex', justifyContent: 'center' }}>
+                                            <ShotCardWave color={isActive ? '#f97316' : '#2a2a2a'} />
+                                        </div>
+
+                                        {/* Duration */}
+                                        <div style={{ padding: '1px 7px 6px', display: 'flex', alignItems: 'center' }}>
+                                            {editingDurationId === shot.id ? (
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    max={10}
+                                                    defaultValue={shot.duration}
+                                                    autoFocus
+                                                    onClick={e => e.stopPropagation()}
+                                                    onMouseDown={e => e.stopPropagation()}
+                                                    onBlur={(e) => {
+                                                        updateShotDuration(shot.id, parseInt(e.target.value) || shot.duration);
+                                                        setEditingDurationId(null);
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            updateShotDuration(shot.id, parseInt(e.currentTarget.value) || shot.duration);
+                                                            setEditingDurationId(null);
+                                                        }
+                                                        e.stopPropagation();
+                                                    }}
+                                                    style={{
+                                                        width: 32,
+                                                        background: 'rgba(249,115,22,0.1)',
+                                                        border: '1px solid rgba(249,115,22,0.4)',
+                                                        borderRadius: 4,
+                                                        color: '#f97316',
+                                                        fontSize: 10,
+                                                        fontFamily: "'JetBrains Mono', monospace",
+                                                        padding: '1px 4px',
+                                                        outline: 'none',
+                                                    }}
+                                                />
+                                            ) : (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setEditingDurationId(shot.id); }}
+                                                    onMouseDown={e => e.stopPropagation()}
+                                                    style={{
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        cursor: 'text',
+                                                        padding: 0,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 2,
+                                                    }}
+                                                >
+                                                    <span style={{
+                                                        fontSize: 10,
+                                                        fontFamily: "'JetBrains Mono', monospace",
+                                                        color: isActive ? '#f97316' : '#444',
+                                                        fontWeight: 600,
+                                                        transition: 'color 0.15s ease',
+                                                    }}>
+                                                        {shot.duration}s
+                                                    </span>
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Active indicator bar at bottom */}
+                                        {isActive && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                bottom: 0,
+                                                left: 0,
+                                                right: 0,
+                                                height: 2,
+                                                background: 'linear-gradient(90deg, transparent, #f97316, transparent)',
+                                            }} />
+                                        )}
+                                    </div>
+                                );
+                            })}
+
+                            {/* Add shot button */}
+                            {shotCards.length < 6 && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); addShot(); }}
+                                    onMouseDown={e => e.stopPropagation()}
+                                    style={{
+                                        flexShrink: 0,
+                                        width: 42,
+                                        borderRadius: 8,
+                                        border: '1px dashed #222',
+                                        background: 'transparent',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: '#333',
+                                        fontSize: 18,
+                                        fontWeight: 300,
+                                        transition: 'all 0.15s ease',
+                                        lineHeight: 1,
+                                    }}
+                                    onMouseEnter={e => {
+                                        (e.currentTarget as HTMLElement).style.borderColor = 'rgba(249,115,22,0.3)';
+                                        (e.currentTarget as HTMLElement).style.color = '#f97316';
+                                    }}
+                                    onMouseLeave={e => {
+                                        (e.currentTarget as HTMLElement).style.borderColor = '#222';
+                                        (e.currentTarget as HTMLElement).style.color = '#333';
+                                    }}
+                                >
+                                    +
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Active shot description panel */}
+                        <div style={{
+                            marginTop: 6,
+                            borderRadius: 8,
+                            border: '1px solid rgba(249,115,22,0.2)',
+                            background: 'rgba(249,115,22,0.03)',
+                            overflow: 'hidden',
+                        }}>
+                            <div style={{
+                                padding: '5px 9px',
+                                borderBottom: '1px solid rgba(249,115,22,0.1)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                            }}>
+                                <span style={{
+                                    fontSize: 9,
+                                    fontFamily: "'JetBrains Mono', monospace",
+                                    color: 'rgba(249,115,22,0.6)',
+                                    letterSpacing: '0.05em',
+                                    textTransform: 'uppercase',
+                                }}>
+                                    Shot {activeShotIndex + 1} / {shotCards.length}
+                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: '#444' }}>dur:</span>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={10}
+                                        value={activeShot.duration}
+                                        onClick={e => e.stopPropagation()}
+                                        onMouseDown={e => e.stopPropagation()}
+                                        onChange={(e) => updateShotDuration(activeShot.id, parseInt(e.target.value) || 1)}
+                                        onKeyDown={e => e.stopPropagation()}
+                                        style={{
+                                            width: 34,
+                                            background: 'rgba(249,115,22,0.08)',
+                                            border: '1px solid rgba(249,115,22,0.2)',
+                                            borderRadius: 4,
+                                            color: '#f97316',
+                                            fontSize: 10,
+                                            fontFamily: "'JetBrains Mono', monospace",
+                                            padding: '1px 5px',
+                                            outline: 'none',
+                                            textAlign: 'center',
+                                        }}
+                                    />
+                                    <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: '#444' }}>s</span>
+                                </div>
+                            </div>
+                            <textarea
+                                value={activeShot.description}
+                                onChange={(e) => updateShotDescription(activeShot.id, e.target.value)}
+                                onClick={e => e.stopPropagation()}
+                                onMouseDown={e => e.stopPropagation()}
+                                onKeyDown={e => e.stopPropagation()}
+                                placeholder="What happens in this shot? e.g. tight close-up as she turns toward camera, eyes wide..."
+                                rows={3}
+                                style={{
+                                    width: '100%',
+                                    boxSizing: 'border-box',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    outline: 'none',
+                                    resize: 'none',
+                                    padding: '8px 9px',
+                                    fontSize: 11,
+                                    fontFamily: "'Inter', system-ui, sans-serif",
+                                    color: '#ccc',
+                                    lineHeight: 1.5,
+                                }}
+                            />
+                        </div>
+                    </div>
+                )}
+            </div>
+
             {/* Process Prompt Button — below image */}
             <div
                 style={{

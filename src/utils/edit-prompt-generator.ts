@@ -97,6 +97,8 @@ export interface GenerateEditPromptOptions {
   projectId?: string;
   preferenceProfile?: PreferenceProfile;
   retryContext?: string;
+  /** Lock specific visual elements so the LLM signals them as must-preserve in the prompt */
+  preserveOptions?: { pose?: boolean; character?: boolean; lighting?: boolean };
 }
 
 export async function generateEditPrompt(
@@ -135,6 +137,18 @@ export async function generateEditPrompt(
   const validConnected = connectedBase64s.filter(c => c !== null) as { b64: string; mime: string; label?: string }[];
 
   let systemPrompt = SYSTEM_PROMPT;
+
+  // Preservation rules injection
+  if (options.preserveOptions) {
+    const locks: string[] = [];
+    if (options.preserveOptions.pose) locks.push('exact body pose and positioning (do not alter stance, limb placement, or gesture)');
+    if (options.preserveOptions.character) locks.push('character identity (face, hair, skin tone, distinctive features — do not change who this person is)');
+    if (options.preserveOptions.lighting) locks.push('existing lighting setup (direction, quality, color temperature, shadows — match exactly)');
+    if (locks.length > 0) {
+      systemPrompt += `\n\nPRESERVATION RULES — The following elements must be locked and unchanged in the output:\n${locks.map(l => `• Preserve ${l}`).join('\n')}\nOnly change what the notes explicitly request. Everything else stays identical to the reference.`;
+    }
+  }
+
   if (options.enableBoardContext && options.projectId) {
     const boardCtx = serializeBoardContext(options.projectId);
     if (boardCtx) systemPrompt += `\n\n${boardCtx}`;

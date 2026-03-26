@@ -28,6 +28,11 @@ export function EditPromptGenerator({ image, notes, connectedImages = [] }: Prop
     const [copied, setCopied] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
 
+    // Preserve controls
+    const [preservePose, setPreservePose] = useState(false);
+    const [preserveCharacter, setPreserveCharacter] = useState(false);
+    const [preserveLighting, setPreserveLighting] = useState(false);
+
     const filledCats = new Set(notes.map(n => n.categoryId));
     const totalEditCats = EDIT_CATEGORIES.length;
     const missingCount = totalEditCats - filledCats.size;
@@ -52,7 +57,9 @@ export function EditPromptGenerator({ image, notes, connectedImages = [] }: Prop
         setResult(null);
 
         try {
-            const res = await generateEditPrompt(apiKey, model, image.blobId, image.mimeType, notes, connectedImages, godModeNodes);
+            const res = await generateEditPrompt(apiKey, model, image.blobId, image.mimeType, notes, connectedImages, godModeNodes, {
+                preserveOptions: { pose: preservePose, character: preserveCharacter, lighting: preserveLighting },
+            });
             setResult(res);
             if (currentProjectId) {
                 const displayW = image.displayWidth ?? Math.min(image.width, 350);
@@ -71,7 +78,7 @@ export function EditPromptGenerator({ image, notes, connectedImages = [] }: Prop
         } finally {
             setIsGenerating(false);
         }
-    }, [apiKey, model, image, notes, connectedImages, godModeNodes, addPromptNode, currentProjectId]);
+    }, [apiKey, model, image, notes, connectedImages, godModeNodes, addPromptNode, currentProjectId, preservePose, preserveCharacter, preserveLighting]);
 
     const handleCopy = useCallback(async () => {
         if (!result) return;
@@ -88,12 +95,64 @@ export function EditPromptGenerator({ image, notes, connectedImages = [] }: Prop
     const accentColor = '#22d3ee';
     const accentGlow = 'rgba(34,211,238,';
 
+    const preserveToggles = [
+        { key: 'pose' as const, label: 'Keep Pose', icon: '🧍', active: preservePose, set: setPreservePose },
+        { key: 'character' as const, label: 'Keep Character', icon: '👤', active: preserveCharacter, set: setPreserveCharacter },
+        { key: 'lighting' as const, label: 'Keep Lighting', icon: '💡', active: preserveLighting, set: setPreserveLighting },
+    ];
+
     return (
         <>
+            {/* Preserve Controls */}
+            <div style={{
+                marginTop: 8,
+                display: 'flex',
+                gap: 5,
+            }}>
+                {preserveToggles.map(({ key, label, icon, active, set }) => (
+                    <button
+                        key={key}
+                        onClick={(e) => { e.stopPropagation(); set(v => !v); }}
+                        onMouseDown={e => e.stopPropagation()}
+                        style={{
+                            flex: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4,
+                            padding: '5px 4px',
+                            borderRadius: 7,
+                            border: active
+                                ? `1px solid ${accentGlow}0.45)`
+                                : '1px solid #1a1a1a',
+                            background: active
+                                ? `${accentGlow}0.08)`
+                                : '#0a0a0a',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                            boxShadow: active ? `0 0 8px ${accentGlow}0.1)` : 'none',
+                        }}
+                    >
+                        <span style={{ fontSize: 9 }}>{icon}</span>
+                        <span style={{
+                            fontSize: 9,
+                            fontFamily: "'JetBrains Mono', monospace",
+                            color: active ? accentColor : '#444',
+                            letterSpacing: '0.03em',
+                            whiteSpace: 'nowrap',
+                            fontWeight: active ? 600 : 400,
+                            transition: 'color 0.15s ease',
+                        }}>
+                            {label}
+                        </span>
+                    </button>
+                ))}
+            </div>
+
             {/* Process Edit Prompt Button */}
             <div
                 style={{
-                    marginTop: 8,
+                    marginTop: 6,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',

@@ -6,6 +6,25 @@ import { serializeBoardContext } from './board-context';
 import { buildPreferenceBlock } from './preference-manager';
 import type { PreferenceProfile } from '../types';
 
+const MULTISHOT_SYSTEM_PROMPT = `You are a precision prompt-writing assistant for AI filmmakers using I2V generation tools that support multi-shot sequences (Kling 3.0, Dee·Dance 2.0, etc.).
+
+Your job: take a shared scene foundation (environment, character, lighting) and per-shot descriptions, then compose a structured multi-shot sequence prompt.
+
+STRICT RULES:
+1. Use ONLY information from the notes and what is literally visible in the reference image(s). Never invent beyond what is provided.
+2. Output exactly one block per shot in this format (no variation):
+   SHOT 1 [Xsec]
+   [prose]
+
+   SHOT 2 [Xsec]
+   [prose]
+3. Each shot's duration is specified in the per-shot data — use it exactly as given.
+4. The scene foundation (environment, lighting, subject identity) applies to all shots unless a per-shot description says otherwise.
+5. Each shot block is 1–3 dense, cinematically-written sentences. Camera → subject → action → environment → lighting order. No bullets, no sub-headers inside a shot.
+6. If a shot description is empty or says "(continue scene naturally)", intelligently stage the next narrative beat from the foundation notes and scene flow.
+7. If audio notes exist in the foundation, end that shot with: Audio: [description]
+8. Output shots directly. No preamble, no "Here are your shots", no markdown fences.`;
+
 const SYSTEM_PROMPT = `You are a precision prompt-writing assistant for AI filmmakers using I2V (image-to-video) generation tools.
 
 Your job: take the filmmaker's raw shot notes and reference image(s), then compose them into a single, authoritative, cinematically-written English prompt.
@@ -60,6 +79,14 @@ function buildUserMessage(notes: CategoryNote[]): string {
   return `My shot notes for this frame. Compose them into a professional I2V prompt:\n\n${sections.join('\n\n')}`;
 }
 
+function buildMultishotUserMessage(notes: CategoryNote[], shots: MultishotShot[]): string {
+  const foundation = buildUserMessage(notes);
+  const shotLines = shots.map((s, i) =>
+    `SHOT ${i + 1} [${s.duration}sec]\n${s.description.trim() || '(continue scene naturally)'}`
+  ).join('\n\n');
+  return `${foundation}\n\n[MULTI-SHOT SEQUENCE — ${shots.length} shots, compose one block per shot]\n${shotLines}`;
+}
+
 async function imageToBase64(blobId: string): Promise<string | null> {
   try {
     const blob = await getBlob(blobId);
@@ -85,6 +112,12 @@ export interface PromptResult {
   evalResult?: EvalResult;
 }
 
+export interface MultishotShot {
+  id: string;
+  duration: number;
+  description: string;
+}
+
 export interface GeneratePromptOptions {
   enableSelfEval?: boolean;
   enableBoardContext?: boolean;
@@ -93,6 +126,8 @@ export interface GeneratePromptOptions {
   preferenceProfile?: PreferenceProfile;
   /** If set, this is a retry — inject prior eval critique */
   retryContext?: string;
+  /** If set, generates a structured multi-shot sequence prompt */
+  multishotConfig?: { shots: MultishotShot[] };
 }
 
 export async function generateThinkingTrace(
@@ -148,7 +183,10 @@ export async function generatePrompt(
   godModeNodes: GodModeNode[] = [],
   options: GeneratePromptOptions = {},
 ): Promise<PromptResult> {
-  let userMessage = buildUserMessage(notes);
+  const isMultishot = !!options.multishotConfig;
+  let userMessage = isMultishot
+    ? buildMultishotUserMessage(notes, options.multishotConfig!.shots)
+    : buildUserMessage(notes);
 
   const activeGodNodes = godModeNodes.filter(g => g.isEnabled && g.text.trim());
   if (activeGodNodes.length > 0) {
@@ -180,7 +218,7 @@ export async function generatePrompt(
   const validConnected = connectedBase64s.filter(c => c !== null) as { b64: string; mime: string; label?: string }[];
 
   // Board context injection into system prompt
-  let systemPrompt = SYSTEM_PROMPT;
+  let systemPrompt = isMultishot ? MULTISHOT_SYSTEM_PROMPT : SYSTEM_PROMPT;
   if (options.enableBoardContext && options.projectId) {
     const boardCtx = serializeBoardContext(options.projectId);
     if (boardCtx) systemPrompt += `\n\n${boardCtx}`;
@@ -229,7 +267,7 @@ export async function generatePrompt(
       'HTTP-Referer': window.location.origin,
       'X-Title': 'Moodboard App',
     },
-    body: JSON.stringify({ model, messages, temperature: 0.25, max_tokens: 1024 }),
+    body: JSON.stringify({ model, messages, temperature: 0.25, max_tokens: isMultishot ? 2048 : 1024 }),
   });
 
   if (!response.ok) {
