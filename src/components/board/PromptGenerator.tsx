@@ -57,13 +57,15 @@ export function PromptGenerator({ image, notes, connectedImages = [] }: Props) {
     const filledCats = new Set(notes.map(n => n.categoryId));
     const missingCount = SHOT_CATEGORIES.length - filledCats.size;
     const hasAnyNotes = notes.length > 0 && notes.some(n => n.text.trim() || n.checkedPrompts.length > 0);
+    const hasMultishotContent = multishotEnabled && shotCards.some(s => s.description.trim());
+    const canGenerate = hasAnyNotes || hasMultishotContent;
 
     const handleClick = useCallback(() => {
         if (!apiKey) {
             toggleSettings();
             return;
         }
-        if (missingCount > 0) {
+        if (!hasMultishotContent && missingCount > 0) {
             setShowConfirm(true);
         } else {
             doGenerate();
@@ -134,8 +136,6 @@ export function PromptGenerator({ image, notes, connectedImages = [] }: Props) {
             setTimeout(() => setCopied(false), 1500);
         } catch { /* ignore */ }
     }, [result]);
-
-    if (!hasAnyNotes) return null;
 
     const activeShot = shotCards.find(s => s.id === activeShotId) ?? shotCards[0];
     const activeShotIndex = shotCards.findIndex(s => s.id === activeShotId);
@@ -526,11 +526,11 @@ export function PromptGenerator({ image, notes, connectedImages = [] }: Props) {
                 }}
             >
                 <button
-                    onClick={(e) => { e.stopPropagation(); handleClick(); }}
+                    onClick={(e) => { e.stopPropagation(); if (canGenerate) handleClick(); }}
                     onMouseDown={e => e.stopPropagation()}
                     onMouseEnter={() => setIsHovered(true)}
                     onMouseLeave={() => setIsHovered(false)}
-                    disabled={isGenerating}
+                    disabled={isGenerating || !canGenerate}
                     style={{
                         width: '100%',
                         display: 'flex',
@@ -541,17 +541,20 @@ export function PromptGenerator({ image, notes, connectedImages = [] }: Props) {
                         borderRadius: 8,
                         border: isGenerating
                             ? '1px solid rgba(249,115,22,0.3)'
-                            : isHovered
-                                ? '1px solid rgba(249,115,22,0.5)'
-                                : '1px solid #222',
+                            : !canGenerate
+                                ? '1px solid #181818'
+                                : isHovered
+                                    ? '1px solid rgba(249,115,22,0.5)'
+                                    : '1px solid #222',
                         background: isGenerating
                             ? 'rgba(249,115,22,0.06)'
                             : isHovered
                                 ? 'rgba(249,115,22,0.08)'
                                 : '#111',
-                        cursor: isGenerating ? 'wait' : 'pointer',
+                        cursor: isGenerating ? 'wait' : !canGenerate ? 'default' : 'pointer',
+                        opacity: !canGenerate && !isGenerating ? 0.4 : 1,
                         transition: 'all 0.15s ease',
-                        boxShadow: isHovered && !isGenerating
+                        boxShadow: isHovered && !isGenerating && canGenerate
                             ? '0 0 16px rgba(249,115,22,0.12)'
                             : 'none',
                     }}

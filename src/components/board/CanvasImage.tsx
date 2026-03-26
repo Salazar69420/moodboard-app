@@ -1126,7 +1126,7 @@ export const CanvasImage = memo(function CanvasImage({ image, zoomScale }: Canva
       )}
 
       {/* Process Prompt button — below image (I2V) */}
-      {imageNotes.length > 0 && !isConnectMode && boardMode === 'i2v' && (
+      {!isConnectMode && boardMode === 'i2v' && (
         <PromptGenerator image={image} notes={imageNotes} connectedImages={[]} />
       )}
 
