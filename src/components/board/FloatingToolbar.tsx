@@ -6,8 +6,17 @@ import { useProjectStore } from '../../stores/useProjectStore';
 import { useImageStore } from '../../stores/useImageStore';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import { SHOT_CATEGORIES, EDIT_CATEGORIES } from '../../types';
-import { generatePrompt } from '../../utils/prompt-generator';
+import { generatePrompt, type MultishotShot } from '../../utils/prompt-generator';
 import { generateEditPrompt } from '../../utils/edit-prompt-generator';
+
+const WAVE_PATH = "M0,10 C8,4 16,16 24,10 C32,4 40,16 48,10 C56,4 64,16 72,10 C80,4 88,16 96,10";
+function ShotWave({ active }: { active: boolean }) {
+    return (
+        <svg width="80" height="20" viewBox="0 0 96 20" fill="none" style={{ display: 'block', opacity: 0.6 }}>
+            <path d={WAVE_PATH} stroke={active ? '#f97316' : '#2a2a2a'} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        </svg>
+    );
+}
 
 interface FloatingToolbarProps {
     image: BoardImage;
@@ -32,6 +41,16 @@ export function FloatingToolbar({ image, displayW, displayH }: FloatingToolbarPr
     const [showVariationsPopover, setShowVariationsPopover] = useState(false);
     const [critiqueInput, setCritiqueInput] = useState('');
     const [isBatchRunning, setIsBatchRunning] = useState(false);
+
+    // Multishot state
+    const [showMultishot, setShowMultishot] = useState(false);
+    const [isMultishotGenerating, setIsMultishotGenerating] = useState(false);
+    const [shotCards, setShotCards] = useState<MultishotShot[]>([
+        { id: 's1', duration: 3, description: '' },
+        { id: 's2', duration: 3, description: '' },
+        { id: 's3', duration: 3, description: '' },
+    ]);
+    const [activeShotId, setActiveShotId] = useState('s1');
 
     const apiKey = useSettingsStore((s) => s.apiKey);
     const model = useSettingsStore((s) => s.model);
@@ -138,6 +157,33 @@ export function FloatingToolbar({ image, displayW, displayH }: FloatingToolbarPr
         }
     }, [apiKey, currentProjectId, isBatchRunning, image, boardMode, displayW, connections, allImages, godModeNodes, categoryNotes, editNotes, promptNodes, addPromptNode, model, setBatchProgress, showToast]);
 
+    const handleMultishotGenerate = useCallback(async () => {
+        if (!apiKey || !currentProjectId || isMultishotGenerating) return;
+        setIsMultishotGenerating(true);
+        try {
+            const notes = categoryNotes.filter(n => n.imageId === image.id);
+            const connectedImageIds = connections
+                .filter(c => c.fromId === image.id || c.toId === image.id)
+                .map(c => c.fromId === image.id ? c.toId : c.fromId);
+            const connectedImages = allImages.filter(img => connectedImageIds.includes(img.id));
+            const activeGodNodes = godModeNodes.filter(g => g.isEnabled && g.text.trim());
+            const existingNodes = promptNodes.filter(n => n.imageId === image.id && n.promptType === 'i2v');
+            const baseX = image.x + displayW + 60;
+            const baseY = image.y + (existingNodes.length * 180);
+            const result = await generatePrompt(apiKey, model, image.blobId, image.mimeType, notes, connectedImages, activeGodNodes, {
+                multishotConfig: { shots: shotCards },
+            });
+            await addPromptNode(currentProjectId, image.id, result.prompt, result.model, 'i2v', baseX, baseY);
+            showToast('Multi-shot prompt generated');
+            setShowMultishot(false);
+        } catch (err) {
+            showToast('Generation failed');
+            console.error(err);
+        } finally {
+            setIsMultishotGenerating(false);
+        }
+    }, [apiKey, currentProjectId, isMultishotGenerating, image, displayW, shotCards, categoryNotes, connections, allImages, godModeNodes, promptNodes, addPromptNode, model, showToast]);
+
     const quickCats = boardMode === 'i2v'
         ? SHOT_CATEGORIES.filter(c => ['subject', 'action', 'camera'].includes(c.id))
         : EDIT_CATEGORIES.filter(c => ['edit-subject', 'edit-action', 'edit-camera'].includes(c.id));
@@ -204,10 +250,26 @@ export function FloatingToolbar({ image, displayW, displayH }: FloatingToolbarPr
                     label="Connect"
                 />
 
+                {/* Multi-shot button — I2V only */}
+                {boardMode === 'i2v' && (
+                    <ToolbarBtn
+                        onClick={() => { setShowMultishot(v => !v); setShowVariationsPopover(false); setShowRatePopover(false); setShowPicker(false); }}
+                        title="Build a multi-shot sequence prompt"
+                        icon={
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <rect x="2" y="7" width="20" height="10" rx="1" />
+                                <path d="M7 7V5M12 7V5M17 7V5M7 17v2M12 17v2M17 17v2" />
+                            </svg>
+                        }
+                        label="Multi-shot"
+                        active={showMultishot || isMultishotGenerating}
+                    />
+                )}
+
                 {/* Variations button */}
                 <div style={{ position: 'relative' }}>
                     <ToolbarBtn
-                        onClick={() => { setShowVariationsPopover(v => !v); setShowRatePopover(false); }}
+                        onClick={() => { setShowVariationsPopover(v => !v); setShowRatePopover(false); setShowMultishot(false); }}
                         title="Generate multiple prompt variations"
                         icon={<span style={{ fontSize: 12 }}>⚡</span>}
                         label="Variations"
@@ -249,7 +311,7 @@ export function FloatingToolbar({ image, displayW, displayH }: FloatingToolbarPr
                 {/* Rate button */}
                 <div style={{ position: 'relative' }}>
                     <ToolbarBtn
-                        onClick={() => { setShowRatePopover(v => !v); setShowVariationsPopover(false); }}
+                        onClick={() => { setShowRatePopover(v => !v); setShowVariationsPopover(false); setShowMultishot(false); }}
                         title="Accept or reject this image"
                         icon={
                             image.evaluation === 'accepted' ? <span style={{ fontSize: 11, color: '#4ade80' }}>👍</span>
@@ -313,6 +375,171 @@ export function FloatingToolbar({ image, displayW, displayH }: FloatingToolbarPr
                     label="Duplicate"
                 />
             </div>
+
+            {/* Multi-shot panel */}
+            {showMultishot && (
+                <div
+                    style={{
+                        background: 'rgba(15,15,18,0.96)',
+                        backdropFilter: 'blur(24px)',
+                        border: '1px solid rgba(249,115,22,0.2)',
+                        borderRadius: 14,
+                        padding: '10px',
+                        width: 300,
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                        animation: 'fadeSlideDown 0.15s ease',
+                    }}
+                >
+                    {/* Header */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", color: 'rgba(249,115,22,0.7)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                            Multi-shot · {shotCards.length} shots · {shotCards.reduce((a, s) => a + s.duration, 0)}s
+                        </span>
+                        <button
+                            onClick={() => {
+                                if (shotCards.length < 6) {
+                                    const newId = `s${Date.now()}`;
+                                    setShotCards(prev => [...prev, { id: newId, duration: 3, description: '' }]);
+                                    setActiveShotId(newId);
+                                }
+                            }}
+                            style={{
+                                background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.2)',
+                                borderRadius: 5, color: '#f97316', fontSize: 13, lineHeight: 1,
+                                cursor: shotCards.length >= 6 ? 'not-allowed' : 'pointer',
+                                padding: '1px 7px', opacity: shotCards.length >= 6 ? 0.3 : 1,
+                            }}
+                        >+</button>
+                    </div>
+
+                    {/* Shot card strip */}
+                    <div style={{ display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 6, scrollbarWidth: 'none' }}>
+                        {shotCards.map((shot, i) => {
+                            const isActive = shot.id === activeShotId;
+                            return (
+                                <div
+                                    key={shot.id}
+                                    onClick={() => setActiveShotId(shot.id)}
+                                    style={{
+                                        flexShrink: 0, width: 76, borderRadius: 8,
+                                        border: isActive ? '1.5px solid rgba(249,115,22,0.6)' : '1px solid rgba(255,255,255,0.07)',
+                                        background: isActive ? 'rgba(249,115,22,0.06)' : 'rgba(255,255,255,0.02)',
+                                        cursor: 'pointer', transition: 'all 0.12s ease', overflow: 'hidden',
+                                        boxShadow: isActive ? '0 0 10px rgba(249,115,22,0.1)' : 'none',
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 6px 2px' }}>
+                                        <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: isActive ? '#f97316' : 'rgba(255,255,255,0.3)', fontWeight: 600, textTransform: 'uppercase' }}>
+                                            S{i + 1}
+                                        </span>
+                                        {shotCards.length > 2 && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setShotCards(prev => {
+                                                        const next = prev.filter(s => s.id !== shot.id);
+                                                        if (activeShotId === shot.id) setActiveShotId(next[Math.max(0, i - 1)]?.id ?? next[0].id);
+                                                        return next;
+                                                    });
+                                                }}
+                                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'rgba(255,255,255,0.15)', fontSize: 10, lineHeight: 1, transition: 'color 0.1s' }}
+                                                onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#ef4444'}
+                                                onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.15)'}
+                                            >×</button>
+                                        )}
+                                    </div>
+                                    <div style={{ padding: '0 6px 2px', display: 'flex', justifyContent: 'center' }}>
+                                        <ShotWave active={isActive} />
+                                    </div>
+                                    <div style={{ padding: '0 6px 5px' }}>
+                                        <span style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", color: isActive ? '#f97316' : 'rgba(255,255,255,0.25)', fontWeight: 600 }}>
+                                            {shot.duration}s
+                                        </span>
+                                    </div>
+                                    {isActive && <div style={{ height: 2, background: 'linear-gradient(90deg, transparent, #f97316, transparent)' }} />}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Active shot editor */}
+                    {(() => {
+                        const active = shotCards.find(s => s.id === activeShotId) ?? shotCards[0];
+                        const idx = shotCards.findIndex(s => s.id === activeShotId);
+                        return (
+                            <div style={{ marginTop: 6, borderRadius: 8, border: '1px solid rgba(249,115,22,0.15)', background: 'rgba(249,115,22,0.03)' }}>
+                                <div style={{ padding: '5px 8px', borderBottom: '1px solid rgba(249,115,22,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: 'rgba(249,115,22,0.5)', textTransform: 'uppercase' }}>
+                                        Shot {idx + 1} / {shotCards.length}
+                                    </span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', fontFamily: "'JetBrains Mono', monospace" }}>dur</span>
+                                        <input
+                                            type="number" min={1} max={10} value={active.duration}
+                                            onClick={e => e.stopPropagation()}
+                                            onChange={e => setShotCards(prev => prev.map(s => s.id === active.id ? { ...s, duration: Math.max(1, Math.min(10, parseInt(e.target.value) || 1)) } : s))}
+                                            onKeyDown={e => e.stopPropagation()}
+                                            style={{
+                                                width: 32, background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.2)',
+                                                borderRadius: 4, color: '#f97316', fontSize: 10, fontFamily: "'JetBrains Mono', monospace",
+                                                padding: '1px 4px', outline: 'none', textAlign: 'center',
+                                            }}
+                                        />
+                                        <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', fontFamily: "'JetBrains Mono', monospace" }}>s</span>
+                                    </div>
+                                </div>
+                                <textarea
+                                    value={active.description}
+                                    onChange={e => setShotCards(prev => prev.map(s => s.id === active.id ? { ...s, description: e.target.value } : s))}
+                                    onClick={e => e.stopPropagation()}
+                                    onKeyDown={e => e.stopPropagation()}
+                                    placeholder="What happens in this shot? e.g. tight close-up as she turns..."
+                                    rows={3}
+                                    style={{
+                                        width: '100%', boxSizing: 'border-box', background: 'transparent',
+                                        border: 'none', outline: 'none', resize: 'none',
+                                        padding: '7px 8px', fontSize: 11,
+                                        fontFamily: "'Inter', system-ui, sans-serif",
+                                        color: 'rgba(255,255,255,0.7)', lineHeight: 1.5,
+                                    }}
+                                />
+                            </div>
+                        );
+                    })()}
+
+                    {/* Generate button */}
+                    <button
+                        onClick={handleMultishotGenerate}
+                        disabled={isMultishotGenerating || !apiKey}
+                        style={{
+                            marginTop: 8, width: '100%', padding: '8px 0',
+                            borderRadius: 8, border: '1px solid rgba(249,115,22,0.4)',
+                            background: isMultishotGenerating ? 'rgba(249,115,22,0.06)' : 'rgba(249,115,22,0.1)',
+                            color: '#f97316', fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
+                            fontWeight: 600, letterSpacing: '0.04em', cursor: isMultishotGenerating ? 'wait' : 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                            transition: 'all 0.15s ease',
+                            opacity: !apiKey ? 0.4 : 1,
+                        }}
+                        onMouseEnter={e => { if (!isMultishotGenerating && apiKey) (e.currentTarget as HTMLElement).style.background = 'rgba(249,115,22,0.18)'; }}
+                        onMouseLeave={e => { if (!isMultishotGenerating) (e.currentTarget as HTMLElement).style.background = 'rgba(249,115,22,0.1)'; }}
+                    >
+                        {isMultishotGenerating ? (
+                            <>
+                                <div style={{ width: 12, height: 12, border: '2px solid rgba(249,115,22,0.2)', borderTopColor: '#f97316', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                                Generating...
+                            </>
+                        ) : (
+                            <>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                </svg>
+                                Generate Sequence
+                            </>
+                        )}
+                    </button>
+                </div>
+            )}
 
             {/* Expandable category picker panel */}
             {showPicker && (
